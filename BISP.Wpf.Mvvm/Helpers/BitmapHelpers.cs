@@ -2,10 +2,10 @@
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows.Interop;
 using System.Windows;
-using System.Windows.Media.Imaging;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace BISP.Wpf.Mvvm.Helpers;
 
@@ -23,7 +23,7 @@ internal static class BitmapHelpers
         bitmap.Save(memory, ImageFormat.Png);
         memory.Position = 0;
 
-        BitmapImage bitmapImage = new BitmapImage();
+        BitmapImage bitmapImage = new();
         bitmapImage.BeginInit();
         bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
         bitmapImage.StreamSource = memory;
@@ -38,7 +38,7 @@ internal static class BitmapHelpers
     /// </summary>
     /// <param name="bitmap"></param>
     /// <returns></returns>
-    public static BitmapSource ToBitmapSource(this System.Drawing.Bitmap bitmap)
+    public static BitmapSource ToBitmapSource(this Bitmap bitmap)
     {
         IntPtr hBitmap = bitmap.GetHbitmap();
         try
@@ -52,6 +52,33 @@ internal static class BitmapHelpers
         finally
         {
             DeleteObject(hBitmap);
+        }
+    }
+
+    public static BitmapSource ToBitmapSourceMarshal(this Bitmap bitmap)
+    {
+        BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, bitmap.PixelFormat);
+
+        try
+        {
+            IntPtr ptr = bmpData.Scan0;
+            int bytes = Math.Abs(bmpData.Stride) * bitmap.Height;
+            byte[] rgbValues = new byte[bytes];
+            Marshal.Copy(ptr, rgbValues, 0, bytes);
+
+            return BitmapSource.Create(
+                bitmap.Width,
+                bitmap.Height,
+                bitmap.HorizontalResolution,
+                bitmap.VerticalResolution,
+                PixelFormats.Bgra32,
+                null,
+                rgbValues,
+                bmpData.Stride);
+        }
+        finally
+        {
+            bitmap.UnlockBits(bmpData);
         }
     }
 

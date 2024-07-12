@@ -4,20 +4,23 @@ using BISP.Wpf.Mvvm.Helpers;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace BISP.Wpf.Mvvm.ViewModels;
 
-public class MainViewModel : ObservableObject
+public class MainViewModelChannel : ObservableObject
 {
     #region Fields
 
+    private CancellationTokenSource _cts;
     private FilterInfo _currentDevice;
     private double _currentFPS;
     private FpsHelper _fpsHelper;
+    private Channel<BitmapSource> _frameChannel;
     private IRelayCommand _startCommand;
     private IRelayCommand _stopCommand;
     private BitmapSource _videoPlayer;
@@ -26,10 +29,13 @@ public class MainViewModel : ObservableObject
 
     #endregion Fields
 
-    public MainViewModel()
+    public MainViewModelChannel()
     {
         _fpsHelper = new FpsHelper();
         GetVideoDevices();
+        _frameChannel = Channel.CreateUnbounded<BitmapSource>();
+        _cts = new CancellationTokenSource();
+        Task.Run(ProcessFramesAsync);
     }
 
     #region Properties
@@ -47,7 +53,6 @@ public class MainViewModel : ObservableObject
     }
 
     public IRelayCommand StartCommand => _startCommand ??= new RelayCommand(Start);
-
     public IRelayCommand StopCommand => _stopCommand ??= new RelayCommand(Stop);
     public ObservableCollection<FilterInfo> VideoDevices { get; set; }
 
@@ -66,6 +71,7 @@ public class MainViewModel : ObservableObject
     private void CloseWindow()
     {
         StopCamera();
+        _frameChannel.Writer.Complete();
     }
 
     private void GetVideoDevices()
@@ -87,23 +93,37 @@ public class MainViewModel : ObservableObject
         }
     }
 
+    private async Task ProcessFramesAsync()
+    {
+        try
+        {
+            while (await _frameChannel.Reader.WaitToReadAsync(_cts.Token))
+            {
+                while (_frameChannel.Reader.TryRead(out var frame))
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        VideoPlayer = frame;
+                        CurrentFPS = _fpsHelper.UpdateFPS();
+                    });
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常取消操作
+        }
+    }
+
     private void ProcessVideoFrame(NewFrameEventArgs eventArgs)
     {
         BitmapSource bi;
         using (var bitmap = (Bitmap)eventArgs.Frame.Clone())
         {
             bi = bitmap.ToBitmapSource();
-            bi.Freeze(); // avoid cross thread operations and prevents leaks
+            bi.Freeze();
         }
-
-        Application.Current.Dispatcher.BeginInvoke(() =>
-        {
-            if (bi != null)
-            {
-                VideoPlayer = bi;
-                CurrentFPS = _fpsHelper.UpdateFPS();
-            }
-        });
+        _frameChannel.Writer.TryWrite(bi);
     }
 
     private void Start()
@@ -133,6 +153,7 @@ public class MainViewModel : ObservableObject
             _videoSource.SignalToStop();
             _videoSource.NewFrame -= Video_NewFrame;
         }
+        _cts.Cancel();
     }
 
     private void Video_NewFrame(object sender, NewFrameEventArgs eventArgs)

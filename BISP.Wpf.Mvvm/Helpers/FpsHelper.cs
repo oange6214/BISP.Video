@@ -7,7 +7,7 @@ public class FpsHelper
 
     public double CurrentFPS { get; private set; }
 
-    public void UpdateFPS()
+    public double UpdateFPS()
     {
         _frameCount++;
         var now = DateTime.UtcNow;
@@ -17,5 +17,7 @@ public class FpsHelper
             _lastFpsUpdateTime = now;
             _frameCount = 0;
         }
+
+        return CurrentFPS;
     }
 }

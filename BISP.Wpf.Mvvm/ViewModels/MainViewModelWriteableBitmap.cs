@@ -4,14 +4,14 @@ using BISP.Wpf.Mvvm.Helpers;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace BISP.Wpf.Mvvm.ViewModels;
 
-public class MainViewModel : ObservableObject
+public class MainViewModelWriteableBitmap : ObservableObject
 {
     #region Fields
 
@@ -20,13 +20,13 @@ public class MainViewModel : ObservableObject
     private FpsHelper _fpsHelper;
     private IRelayCommand _startCommand;
     private IRelayCommand _stopCommand;
-    private BitmapSource _videoPlayer;
+    private WriteableBitmap _videoPlayer;
     private IVideoSource _videoSource;
     private IRelayCommand _windowClosingCommand;
 
     #endregion Fields
 
-    public MainViewModel()
+    public MainViewModelWriteableBitmap()
     {
         _fpsHelper = new FpsHelper();
         GetVideoDevices();
@@ -49,9 +49,10 @@ public class MainViewModel : ObservableObject
     public IRelayCommand StartCommand => _startCommand ??= new RelayCommand(Start);
 
     public IRelayCommand StopCommand => _stopCommand ??= new RelayCommand(Stop);
+
     public ObservableCollection<FilterInfo> VideoDevices { get; set; }
 
-    public BitmapSource VideoPlayer
+    public WriteableBitmap VideoPlayer
     {
         get => _videoPlayer;
         set => SetProperty(ref _videoPlayer, value);
@@ -89,20 +90,14 @@ public class MainViewModel : ObservableObject
 
     private void ProcessVideoFrame(NewFrameEventArgs eventArgs)
     {
-        BitmapSource bi;
-        using (var bitmap = (Bitmap)eventArgs.Frame.Clone())
-        {
-            bi = bitmap.ToBitmapSource();
-            bi.Freeze(); // avoid cross thread operations and prevents leaks
-        }
+        Bitmap bitmap = (Bitmap)eventArgs.Frame.Clone();
 
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            if (bi != null)
-            {
-                VideoPlayer = bi;
-                CurrentFPS = _fpsHelper.UpdateFPS();
-            }
+            var wb = WriteableBitmapHelper.BitmapToWriteablBitmap(bitmap);
+
+            VideoPlayer = wb;
+            CurrentFPS = _fpsHelper.UpdateFPS();
         });
     }
 

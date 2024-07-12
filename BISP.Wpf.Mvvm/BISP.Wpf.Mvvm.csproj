@@ -24,4 +24,10 @@
 		<Folder Include="Controls\" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Reference Include="BISP.CommonElementUI">
+	    <HintPath>..\Shard\Bin\Debug\BISP.CommonElementUI.dll</HintPath>
+	  </Reference>
+	</ItemGroup>
+
 </Project>

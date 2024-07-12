@@ -41,40 +41,51 @@ namespace BISP.Video.DirectShow;
 
 public class VideoCaptureDevice : IVideoSource
 {
+    private static Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
+
+    private static Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
+
+    // cache for video/snapshot capabilities and video inputs
+    private static Dictionary<string, VideoCapabilities[]> cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
+
+    // recieved byte count
+    private long bytesReceived;
+
+    private VideoInput crossbarVideoInput = VideoInput.Default;
+
+    private VideoInput[] crossbarVideoInputs = null;
+
     // moniker string of video capture device
     private string deviceMoniker;
 
     // received frames count
     private int framesReceived;
 
-    // recieved byte count
-    private long bytesReceived;
-
-    // video and snapshot resolutions to set
-    private VideoCapabilities videoResolution = null;
-
-    private VideoCapabilities snapshotResolution = null;
-
-    // provide snapshots or not
-    private bool provideSnapshots = false;
-
-    // JPEG encoding preference
-    private bool preferJpegEncoding = true;
+    // flag specifying if IAMCrossbar interface is supported by the running graph/source object
+    private bool? isCrossbarAvailable = null;
 
     // check if JPEG encoding is enabled
     private bool jpegEncodingEnabled = false;
 
-    private Thread thread = null;
-    private ManualResetEvent stopEvent = null;
+    private bool needToDisplayCrossBarPropertyPage = false;
 
-    private VideoCapabilities[] videoCapabilities;
-    private VideoCapabilities[] snapshotCapabilities;
+    private bool needToDisplayPropertyPage = false;
 
     private bool needToSetVideoInput = false;
+
     private bool needToSimulateTrigger = false;
-    private bool needToDisplayPropertyPage = false;
-    private bool needToDisplayCrossBarPropertyPage = false;
+
     private IntPtr parentWindowForPropertyPage = IntPtr.Zero;
+
+    // JPEG encoding preference
+    private bool preferJpegEncoding = true;
+
+    // provide snapshots or not
+    private bool provideSnapshots = false;
+
+    private VideoCapabilities[] snapshotCapabilities;
+
+    private VideoCapabilities snapshotResolution = null;
 
     // video capture source object
     private object sourceObject = null;
@@ -82,48 +93,84 @@ public class VideoCaptureDevice : IVideoSource
     // time of starting the DirectX graph
     private DateTime startTime = new DateTime();
 
+    private ManualResetEvent stopEvent = null;
+
     // dummy object to lock for synchronization
     private object sync = new object();
 
-    // flag specifying if IAMCrossbar interface is supported by the running graph/source object
-    private bool? isCrossbarAvailable = null;
+    private Thread thread = null;
 
-    private VideoInput[] crossbarVideoInputs = null;
-    private VideoInput crossbarVideoInput = VideoInput.Default;
+    private VideoCapabilities[] videoCapabilities;
 
-    // cache for video/snapshot capabilities and video inputs
-    private static Dictionary<string, VideoCapabilities[]> cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
-
-    private static Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
-    private static Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
+    // video and snapshot resolutions to set
+    private VideoCapabilities videoResolution = null;
 
     /// <summary>
-    /// Current video input of capture card.
+    /// Initializes a new instance of the <see cref="VideoCaptureDevice"/> class.
     /// </summary>
     ///
-    /// <remarks><para>The property specifies video input to use for video devices like capture cards
-    /// (those which provide crossbar configuration). List of available video inputs can be obtained
-    /// from <see cref="AvailableCrossbarVideoInputs"/> property.</para>
+    public VideoCaptureDevice()
+    { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VideoCaptureDevice"/> class.
+    /// </summary>
     ///
-    /// <para>To check if the video device supports crossbar configuration, the <see cref="CheckIfCrossbarAvailable"/>
-    /// method can be used.</para>
+    /// <param name="deviceMoniker">Moniker string of video capture device.</param>
     ///
-    /// <para><note>This property can be set as before running video device, as while running it.</note></para>
+    public VideoCaptureDevice(string deviceMoniker)
+    {
+        this.deviceMoniker = deviceMoniker;
+    }
+
+    /// <summary>
+    /// New frame event.
+    /// </summary>
     ///
-    /// <para>By default this property is set to <see cref="VideoInput.Default"/>, which means video input
-    /// will not be set when running video device, but currently configured will be used. After video device
-    /// is started this property will be updated anyway to tell current video input.</para>
+    /// <remarks><para>Notifies clients about new available frame from video source.</para>
+    ///
+    /// <para><note>Since video source may have multiple clients, each client is responsible for
+    /// making a copy (cloning) of the passed video frame, because the video source disposes its
+    /// own original copy after notifying of clients.</note></para>
     /// </remarks>
     ///
-    public VideoInput CrossbarVideoInput
-    {
-        get { return crossbarVideoInput; }
-        set
-        {
-            needToSetVideoInput = true;
-            crossbarVideoInput = value;
-        }
-    }
+    public event NewFrameEventHandler NewFrame;
+
+    /// <summary>
+    /// Video playing finished event.
+    /// </summary>
+    ///
+    /// <remarks><para>This event is used to notify clients that the video playing has finished.</para>
+    /// </remarks>
+    ///
+    public event PlayingFinishedEventHandler PlayingFinished;
+
+    /// <summary>
+    /// Snapshot frame event.
+    /// </summary>
+    ///
+    /// <remarks><para>Notifies clients about new available snapshot frame - the one which comes when
+    /// camera's snapshot/shutter button is pressed.</para>
+    ///
+    /// <para>See documentation to <see cref="ProvideSnapshots"/> for additional information.</para>
+    ///
+    /// <para><note>Since video source may have multiple clients, each client is responsible for
+    /// making a copy (cloning) of the passed snapshot frame, because the video source disposes its
+    /// own original copy after notifying of clients.</note></para>
+    /// </remarks>
+    ///
+    /// <seealso cref="ProvideSnapshots"/>
+    ///
+    public event NewFrameEventHandler SnapshotFrame;
+
+    /// <summary>
+    /// Video source error event.
+    /// </summary>
+    ///
+    /// <remarks>This event is used to notify clients about any type of errors occurred in
+    /// video source object, for example internal exceptions.</remarks>
+    ///
+    public event VideoSourceErrorEventHandler VideoSourceError;
 
     /// <summary>
     /// Available inputs of the video capture card.
@@ -179,156 +226,6 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
-    /// Specifies if snapshots should be provided or not.
-    /// </summary>
-    ///
-    /// <remarks><para>Some USB cameras/devices may have a shutter button, which may result into snapshot if it
-    /// is pressed. So the property specifies if the video source will try providing snapshots or not - it will
-    /// check if the camera supports providing still image snapshots. If camera supports snapshots and the property
-    /// is set to <see langword="true"/>, then snapshots will be provided through <see cref="SnapshotFrame"/>
-    /// event.</para>
-    ///
-    /// <para>Check supported sizes of snapshots using <see cref="SnapshotCapabilities"/> property and set the
-    /// desired size using <see cref="SnapshotResolution"/> property.</para>
-    ///
-    /// <para><note>The property must be set before running the video source to take effect.</note></para>
-    ///
-    /// <para>Default value of the property is set to <see langword="false"/>.</para>
-    /// </remarks>
-    ///
-    public bool ProvideSnapshots
-    {
-        get { return provideSnapshots; }
-        set { provideSnapshots = value; }
-    }
-
-    /// <summary>
-    /// Specifies preference for JPEG encoding mode for video acquisition.
-    /// </summary>
-    ///
-    /// <remarks><para>Many video devices can provide video frames encoded as JPEG image,
-    /// which increases frame rate (as transferring uncompressed RGB data over USB interface
-    /// is much slower). If device supports it, then we can instruct it to provide JPEG images.
-    /// If not, it is configured to provide RGB data.</para>
-    ///
-    /// <para>The property must be set before starting video device to take an effect.</para>
-    ///
-    /// <para><note>The <see cref="NewFrame"/> event provides uncompressed image anyway.
-    /// This property is only affects internal mode of video acquisition.</note></para>
-    ///
-    /// <para>Default value of the property is set to <see langword="true"/>, which should
-    /// be kept this way unless there is some strong reason otherwise.</para>
-    /// </remarks>
-    ///
-    public bool PreferJpegEncoding
-    {
-        get { return preferJpegEncoding; }
-        set { preferJpegEncoding = value; }
-    }
-
-    /// <summary>
-    /// Check if JPEG encoding is enabled for running device.
-    /// </summary>
-    ///
-    /// <remarks><para>Specifies if video acquisition is configured to provide
-    /// JPEG encoded images.</para>
-    /// </remarks>
-    ///
-    /// <seealso cref="PreferJpegEncoding"/>
-    ///
-    public bool JpegEncodingEnabled
-    {
-        get { return JpegEncodingEnabled; }
-    }
-
-    /// <summary>
-    /// New frame event.
-    /// </summary>
-    ///
-    /// <remarks><para>Notifies clients about new available frame from video source.</para>
-    ///
-    /// <para><note>Since video source may have multiple clients, each client is responsible for
-    /// making a copy (cloning) of the passed video frame, because the video source disposes its
-    /// own original copy after notifying of clients.</note></para>
-    /// </remarks>
-    ///
-    public event NewFrameEventHandler NewFrame;
-
-    /// <summary>
-    /// Snapshot frame event.
-    /// </summary>
-    ///
-    /// <remarks><para>Notifies clients about new available snapshot frame - the one which comes when
-    /// camera's snapshot/shutter button is pressed.</para>
-    ///
-    /// <para>See documentation to <see cref="ProvideSnapshots"/> for additional information.</para>
-    ///
-    /// <para><note>Since video source may have multiple clients, each client is responsible for
-    /// making a copy (cloning) of the passed snapshot frame, because the video source disposes its
-    /// own original copy after notifying of clients.</note></para>
-    /// </remarks>
-    ///
-    /// <seealso cref="ProvideSnapshots"/>
-    ///
-    public event NewFrameEventHandler SnapshotFrame;
-
-    /// <summary>
-    /// Video source error event.
-    /// </summary>
-    ///
-    /// <remarks>This event is used to notify clients about any type of errors occurred in
-    /// video source object, for example internal exceptions.</remarks>
-    ///
-    public event VideoSourceErrorEventHandler VideoSourceError;
-
-    /// <summary>
-    /// Video playing finished event.
-    /// </summary>
-    ///
-    /// <remarks><para>This event is used to notify clients that the video playing has finished.</para>
-    /// </remarks>
-    ///
-    public event PlayingFinishedEventHandler PlayingFinished;
-
-    /// <summary>
-    /// Video source.
-    /// </summary>
-    ///
-    /// <remarks>Video source is represented by moniker string of video capture device.</remarks>
-    ///
-    public virtual string Source
-    {
-        get { return deviceMoniker; }
-        set
-        {
-            deviceMoniker = value;
-
-            videoCapabilities = null;
-            snapshotCapabilities = null;
-            crossbarVideoInputs = null;
-            isCrossbarAvailable = null;
-        }
-    }
-
-    /// <summary>
-    /// Received frames count.
-    /// </summary>
-    ///
-    /// <remarks>Number of frames the video source provided from the moment of the last
-    /// access to the property.
-    /// </remarks>
-    ///
-    public int FramesReceived
-    {
-        get
-        {
-            int frames = framesReceived;
-            framesReceived = 0;
-            return frames;
-        }
-    }
-
-    /// <summary>
     /// Received bytes count.
     /// </summary>
     ///
@@ -347,26 +244,44 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
-    /// State of the video source.
+    /// Current video input of capture card.
     /// </summary>
     ///
-    /// <remarks>Current state of video source object - running or not.</remarks>
+    /// <remarks><para>The property specifies video input to use for video devices like capture cards
+    /// (those which provide crossbar configuration). List of available video inputs can be obtained
+    /// from <see cref="AvailableCrossbarVideoInputs"/> property.</para>
     ///
-    public bool IsRunning
+    /// <para>To check if the video device supports crossbar configuration, the <see cref="CheckIfCrossbarAvailable"/>
+    /// method can be used.</para>
+    ///
+    /// <para><note>This property can be set as before running video device, as while running it.</note></para>
+    ///
+    /// <para>By default this property is set to <see cref="VideoInput.Default"/>, which means video input
+    /// will not be set when running video device, but currently configured will be used. After video device
+    /// is started this property will be updated anyway to tell current video input.</para>
+    /// </remarks>
+    ///
+    public VideoInput CrossbarVideoInput
     {
-        get
+        get { return crossbarVideoInput; }
+        set
         {
-            if (thread != null)
-            {
-                // check thread status
-                if (thread.Join(0) == false)
-                    return true;
-
-                // the thread is not running, free resources
-                Free();
-            }
-            return false;
+            needToSetVideoInput = true;
+            crossbarVideoInput = value;
         }
+    }
+
+    /// <summary>
+    /// Obsolete - no longer in use.
+    /// </summary>
+    ///
+    /// <remarks><para>The property is obsolete. Setting this property does not have any effect.</para></remarks>
+    ///
+    [Obsolete]
+    public int DesiredFrameRate
+    {
+        get { return 0; }
+        set { }
     }
 
     /// <summary>
@@ -398,101 +313,107 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
-    /// Obsolete - no longer in use.
+    /// Received frames count.
     /// </summary>
     ///
-    /// <remarks><para>The property is obsolete. Setting this property does not have any effect.</para></remarks>
-    ///
-    [Obsolete]
-    public int DesiredFrameRate
-    {
-        get { return 0; }
-        set { }
-    }
-
-    /// <summary>
-    /// Video resolution to set.
-    /// </summary>
-    ///
-    /// <remarks><para>The property allows to set one of the video resolutions supported by the camera.
-    /// Use <see cref="VideoCapabilities"/> property to get the list of supported video resolutions.</para>
-    ///
-    /// <para><note>The property must be set before camera is started to make any effect.</note></para>
-    ///
-    /// <para>Default value of the property is set to <see langword="null"/>, which means default video
-    /// resolution is used.</para>
+    /// <remarks>Number of frames the video source provided from the moment of the last
+    /// access to the property.
     /// </remarks>
     ///
-    public VideoCapabilities VideoResolution
-    {
-        get { return videoResolution; }
-        set { videoResolution = value; }
-    }
-
-    /// <summary>
-    /// Snapshot resolution to set.
-    /// </summary>
-    ///
-    /// <remarks><para>The property allows to set one of the snapshot resolutions supported by the camera.
-    /// Use <see cref="SnapshotCapabilities"/> property to get the list of supported snapshot resolutions.</para>
-    ///
-    /// <para><note>The property must be set before camera is started to make any effect.</note></para>
-    ///
-    /// <para>Default value of the property is set to <see langword="null"/>, which means default snapshot
-    /// resolution is used.</para>
-    /// </remarks>
-    ///
-    public VideoCapabilities SnapshotResolution
-    {
-        get { return snapshotResolution; }
-        set { snapshotResolution = value; }
-    }
-
-    /// <summary>
-    /// Video capabilities of the device.
-    /// </summary>
-    ///
-    /// <remarks><para>The property provides list of device's video capabilities.</para>
-    ///
-    /// <para><note>It is recomended not to call this property immediately after <see cref="Start"/> method, since
-    /// device may not start yet and provide its information. It is better to call the property
-    /// before starting device or a bit after (but not immediately after).</note></para>
-    /// </remarks>
-    ///
-    public VideoCapabilities[] VideoCapabilities
+    public int FramesReceived
     {
         get
         {
-            if (videoCapabilities == null)
-            {
-                lock (cacheVideoCapabilities)
-                {
-                    if ((!string.IsNullOrEmpty(deviceMoniker)) && (cacheVideoCapabilities.ContainsKey(deviceMoniker)))
-                    {
-                        videoCapabilities = cacheVideoCapabilities[deviceMoniker];
-                    }
-                }
-
-                if (videoCapabilities == null)
-                {
-                    if (!IsRunning)
-                    {
-                        // create graph without playing to get the video/snapshot capabilities only.
-                        // not very clean but it works
-                        WorkerThread(false);
-                    }
-                    else
-                    {
-                        for (int i = 0; (i < 500) && (videoCapabilities == null); i++)
-                        {
-                            Thread.Sleep(10);
-                        }
-                    }
-                }
-            }
-            // don't return null even capabilities are not provided for some reason
-            return (videoCapabilities != null) ? videoCapabilities : new VideoCapabilities[0];
+            int frames = framesReceived;
+            framesReceived = 0;
+            return frames;
         }
+    }
+
+    /// <summary>
+    /// State of the video source.
+    /// </summary>
+    ///
+    /// <remarks>Current state of video source object - running or not.</remarks>
+    ///
+    public bool IsRunning
+    {
+        get
+        {
+            if (thread != null)
+            {
+                // check thread status
+                if (thread.Join(0) == false)
+                    return true;
+
+                // the thread is not running, free resources
+                Free();
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Check if JPEG encoding is enabled for running device.
+    /// </summary>
+    ///
+    /// <remarks><para>Specifies if video acquisition is configured to provide
+    /// JPEG encoded images.</para>
+    /// </remarks>
+    ///
+    /// <seealso cref="PreferJpegEncoding"/>
+    ///
+    public bool JpegEncodingEnabled
+    {
+        get { return JpegEncodingEnabled; }
+    }
+
+    /// <summary>
+    /// Specifies preference for JPEG encoding mode for video acquisition.
+    /// </summary>
+    ///
+    /// <remarks><para>Many video devices can provide video frames encoded as JPEG image,
+    /// which increases frame rate (as transferring uncompressed RGB data over USB interface
+    /// is much slower). If device supports it, then we can instruct it to provide JPEG images.
+    /// If not, it is configured to provide RGB data.</para>
+    ///
+    /// <para>The property must be set before starting video device to take an effect.</para>
+    ///
+    /// <para><note>The <see cref="NewFrame"/> event provides uncompressed image anyway.
+    /// This property is only affects internal mode of video acquisition.</note></para>
+    ///
+    /// <para>Default value of the property is set to <see langword="true"/>, which should
+    /// be kept this way unless there is some strong reason otherwise.</para>
+    /// </remarks>
+    ///
+    public bool PreferJpegEncoding
+    {
+        get { return preferJpegEncoding; }
+        set { preferJpegEncoding = value; }
+    }
+
+    /// <summary>
+    /// Specifies if snapshots should be provided or not.
+    /// </summary>
+    ///
+    /// <remarks><para>Some USB cameras/devices may have a shutter button, which may result into snapshot if it
+    /// is pressed. So the property specifies if the video source will try providing snapshots or not - it will
+    /// check if the camera supports providing still image snapshots. If camera supports snapshots and the property
+    /// is set to <see langword="true"/>, then snapshots will be provided through <see cref="SnapshotFrame"/>
+    /// event.</para>
+    ///
+    /// <para>Check supported sizes of snapshots using <see cref="SnapshotCapabilities"/> property and set the
+    /// desired size using <see cref="SnapshotResolution"/> property.</para>
+    ///
+    /// <para><note>The property must be set before running the video source to take effect.</note></para>
+    ///
+    /// <para>Default value of the property is set to <see langword="false"/>.</para>
+    /// </remarks>
+    ///
+    public bool ProvideSnapshots
+    {
+        get { return provideSnapshots; }
+        set { provideSnapshots = value; }
     }
 
     /// <summary>
@@ -550,6 +471,45 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
+    /// Snapshot resolution to set.
+    /// </summary>
+    ///
+    /// <remarks><para>The property allows to set one of the snapshot resolutions supported by the camera.
+    /// Use <see cref="SnapshotCapabilities"/> property to get the list of supported snapshot resolutions.</para>
+    ///
+    /// <para><note>The property must be set before camera is started to make any effect.</note></para>
+    ///
+    /// <para>Default value of the property is set to <see langword="null"/>, which means default snapshot
+    /// resolution is used.</para>
+    /// </remarks>
+    ///
+    public VideoCapabilities SnapshotResolution
+    {
+        get { return snapshotResolution; }
+        set { snapshotResolution = value; }
+    }
+
+    /// <summary>
+    /// Video source.
+    /// </summary>
+    ///
+    /// <remarks>Video source is represented by moniker string of video capture device.</remarks>
+    ///
+    public virtual string Source
+    {
+        get { return deviceMoniker; }
+        set
+        {
+            deviceMoniker = value;
+
+            videoCapabilities = null;
+            snapshotCapabilities = null;
+            crossbarVideoInputs = null;
+            isCrossbarAvailable = null;
+        }
+    }
+
+    /// <summary>
     /// Source COM object of camera capture device.
     /// </summary>
     ///
@@ -567,124 +527,152 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="VideoCaptureDevice"/> class.
+    /// Video capabilities of the device.
     /// </summary>
     ///
-    public VideoCaptureDevice()
-    { }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="VideoCaptureDevice"/> class.
-    /// </summary>
+    /// <remarks><para>The property provides list of device's video capabilities.</para>
     ///
-    /// <param name="deviceMoniker">Moniker string of video capture device.</param>
-    ///
-    public VideoCaptureDevice(string deviceMoniker)
-    {
-        this.deviceMoniker = deviceMoniker;
-    }
-
-    /// <summary>
-    /// Start video source.
-    /// </summary>
-    ///
-    /// <remarks>Starts video source and return execution to caller. Video source
-    /// object creates background thread and notifies about new frames with the
-    /// help of <see cref="NewFrame"/> event.</remarks>
-    ///
-    public void Start()
-    {
-        if (!IsRunning)
-        {
-            // check source
-            if (string.IsNullOrEmpty(deviceMoniker))
-                throw new ArgumentException("Video source is not specified.");
-
-            framesReceived = 0;
-            bytesReceived = 0;
-            isCrossbarAvailable = null;
-            needToSetVideoInput = true;
-
-            // create events
-            stopEvent = new ManualResetEvent(false);
-
-            lock (sync)
-            {
-                // create and start new thread
-                thread = new Thread(new ThreadStart(WorkerThread));
-                thread.Name = deviceMoniker; // mainly for debugging
-                thread.Start();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Signal video source to stop its work.
-    /// </summary>
-    ///
-    /// <remarks>Signals video source to stop its background thread, stop to
-    /// provide new frames and free resources.</remarks>
-    ///
-    public void SignalToStop()
-    {
-        // stop thread
-        if (thread != null)
-        {
-            // signal to stop
-            stopEvent.Set();
-        }
-    }
-
-    /// <summary>
-    /// Wait for video source has stopped.
-    /// </summary>
-    ///
-    /// <remarks>Waits for source stopping after it was signalled to stop using
-    /// <see cref="SignalToStop"/> method.</remarks>
-    ///
-    public void WaitForStop()
-    {
-        if (thread != null)
-        {
-            // wait for thread stop
-            thread.Join();
-
-            Free();
-        }
-    }
-
-    /// <summary>
-    /// Stop video source.
-    /// </summary>
-    ///
-    /// <remarks><para>Stops video source aborting its thread.</para>
-    ///
-    /// <para><note>Since the method aborts background thread, its usage is highly not preferred
-    /// and should be done only if there are no other options. The correct way of stopping camera
-    /// is <see cref="SignalToStop">signaling it stop</see> and then
-    /// <see cref="WaitForStop">waiting</see> for background thread's completion.</note></para>
+    /// <para><note>It is recomended not to call this property immediately after <see cref="Start"/> method, since
+    /// device may not start yet and provide its information. It is better to call the property
+    /// before starting device or a bit after (but not immediately after).</note></para>
     /// </remarks>
     ///
-    public void Stop()
+    public VideoCapabilities[] VideoCapabilities
     {
-        if (this.IsRunning)
+        get
         {
-            thread.Abort();
-            WaitForStop();
+            if (videoCapabilities == null)
+            {
+                lock (cacheVideoCapabilities)
+                {
+                    if ((!string.IsNullOrEmpty(deviceMoniker)) && (cacheVideoCapabilities.ContainsKey(deviceMoniker)))
+                    {
+                        videoCapabilities = cacheVideoCapabilities[deviceMoniker];
+                    }
+                }
+
+                if (videoCapabilities == null)
+                {
+                    if (!IsRunning)
+                    {
+                        // create graph without playing to get the video/snapshot capabilities only.
+                        // not very clean but it works
+                        WorkerThread(false);
+                    }
+                    else
+                    {
+                        for (int i = 0; (i < 500) && (videoCapabilities == null); i++)
+                        {
+                            Thread.Sleep(10);
+                        }
+                    }
+                }
+            }
+            // don't return null even capabilities are not provided for some reason
+            return (videoCapabilities != null) ? videoCapabilities : new VideoCapabilities[0];
         }
     }
 
     /// <summary>
-    /// Free resource.
+    /// Video resolution to set.
     /// </summary>
     ///
-    private void Free()
+    /// <remarks><para>The property allows to set one of the video resolutions supported by the camera.
+    /// Use <see cref="VideoCapabilities"/> property to get the list of supported video resolutions.</para>
+    ///
+    /// <para><note>The property must be set before camera is started to make any effect.</note></para>
+    ///
+    /// <para>Default value of the property is set to <see langword="null"/>, which means default video
+    /// resolution is used.</para>
+    /// </remarks>
+    ///
+    public VideoCapabilities VideoResolution
     {
-        thread = null;
+        get { return videoResolution; }
+        set { videoResolution = value; }
+    }
 
-        // release events
-        stopEvent.Close();
-        stopEvent = null;
+    /// <summary>
+    /// Check if running video source provides crossbar for configuration.
+    /// </summary>
+    ///
+    /// <returns>Returns <see langword="true"/> if crossbar configuration is available or
+    /// <see langword="false"/> otherwise.</returns>
+    ///
+    /// <remarks><para>The method reports if the video source provides crossbar configuration
+    /// using <see cref="DisplayCrossbarPropertyPage"/>.</para>
+    /// </remarks>
+    ///
+    public bool CheckIfCrossbarAvailable()
+    {
+        lock (sync)
+        {
+            if (!isCrossbarAvailable.HasValue)
+            {
+                if (!IsRunning)
+                {
+                    // create graph without playing to collect available inputs
+                    WorkerThread(false);
+                }
+                else
+                {
+                    for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue); i++)
+                    {
+                        Thread.Sleep(10);
+                    }
+                }
+            }
+
+            return (!isCrossbarAvailable.HasValue) ? false : isCrossbarAvailable.Value;
+        }
+    }
+
+    /// <summary>
+    /// Display property page of video crossbar (Analog Video Crossbar filter).
+    /// </summary>
+    ///
+    /// <param name="parentWindow">Handle of parent window.</param>
+    ///
+    /// <remarks><para>The Analog Video Crossbar filter is modeled after a general switching matrix,
+    /// with n inputs and m outputs. For example, a video card might have two external connectors:
+    /// a coaxial connector for TV, and an S-video input. These would be represented as input pins on
+    /// the filter. The displayed property page allows to configure the crossbar by selecting input
+    /// of a video card to use.</para>
+    ///
+    /// <para><note>This method can be invoked only when video source is running (<see cref="IsRunning"/> is
+    /// <see langword="true"/>). Otherwise it generates exception.</note></para>
+    ///
+    /// <para>Use <see cref="CheckIfCrossbarAvailable"/> method to check if running video source provides
+    /// crossbar configuration.</para>
+    /// </remarks>
+    ///
+    /// <exception cref="ApplicationException">The video source must be running in order to display crossbar property page.</exception>
+    /// <exception cref="NotSupportedException">Crossbar configuration is not supported by currently running video source.</exception>
+    ///
+    public void DisplayCrossbarPropertyPage(IntPtr parentWindow)
+    {
+        lock (sync)
+        {
+            // wait max 5 seconds till the flag gets initialized
+            for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue) && (IsRunning); i++)
+            {
+                Thread.Sleep(10);
+            }
+
+            if ((!IsRunning) || (!isCrossbarAvailable.HasValue))
+            {
+                throw new ApplicationException("The video source must be running in order to display crossbar property page.");
+            }
+
+            if (!isCrossbarAvailable.Value)
+            {
+                throw new NotSupportedException("Crossbar configuration is not supported by currently running video source.");
+            }
+
+            // pass the request to background thread if video source is running
+            parentWindowForPropertyPage = parentWindow;
+            needToDisplayCrossBarPropertyPage = true;
+        }
     }
 
     /// <summary>
@@ -740,160 +728,6 @@ public class VideoCaptureDevice : IVideoSource
 
             Marshal.ReleaseComObject(tempSourceObject);
         }
-    }
-
-    /// <summary>
-    /// Display property page of video crossbar (Analog Video Crossbar filter).
-    /// </summary>
-    ///
-    /// <param name="parentWindow">Handle of parent window.</param>
-    ///
-    /// <remarks><para>The Analog Video Crossbar filter is modeled after a general switching matrix,
-    /// with n inputs and m outputs. For example, a video card might have two external connectors:
-    /// a coaxial connector for TV, and an S-video input. These would be represented as input pins on
-    /// the filter. The displayed property page allows to configure the crossbar by selecting input
-    /// of a video card to use.</para>
-    ///
-    /// <para><note>This method can be invoked only when video source is running (<see cref="IsRunning"/> is
-    /// <see langword="true"/>). Otherwise it generates exception.</note></para>
-    ///
-    /// <para>Use <see cref="CheckIfCrossbarAvailable"/> method to check if running video source provides
-    /// crossbar configuration.</para>
-    /// </remarks>
-    ///
-    /// <exception cref="ApplicationException">The video source must be running in order to display crossbar property page.</exception>
-    /// <exception cref="NotSupportedException">Crossbar configuration is not supported by currently running video source.</exception>
-    ///
-    public void DisplayCrossbarPropertyPage(IntPtr parentWindow)
-    {
-        lock (sync)
-        {
-            // wait max 5 seconds till the flag gets initialized
-            for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue) && (IsRunning); i++)
-            {
-                Thread.Sleep(10);
-            }
-
-            if ((!IsRunning) || (!isCrossbarAvailable.HasValue))
-            {
-                throw new ApplicationException("The video source must be running in order to display crossbar property page.");
-            }
-
-            if (!isCrossbarAvailable.Value)
-            {
-                throw new NotSupportedException("Crossbar configuration is not supported by currently running video source.");
-            }
-
-            // pass the request to background thread if video source is running
-            parentWindowForPropertyPage = parentWindow;
-            needToDisplayCrossBarPropertyPage = true;
-        }
-    }
-
-    /// <summary>
-    /// Check if running video source provides crossbar for configuration.
-    /// </summary>
-    ///
-    /// <returns>Returns <see langword="true"/> if crossbar configuration is available or
-    /// <see langword="false"/> otherwise.</returns>
-    ///
-    /// <remarks><para>The method reports if the video source provides crossbar configuration
-    /// using <see cref="DisplayCrossbarPropertyPage"/>.</para>
-    /// </remarks>
-    ///
-    public bool CheckIfCrossbarAvailable()
-    {
-        lock (sync)
-        {
-            if (!isCrossbarAvailable.HasValue)
-            {
-                if (!IsRunning)
-                {
-                    // create graph without playing to collect available inputs
-                    WorkerThread(false);
-                }
-                else
-                {
-                    for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue); i++)
-                    {
-                        Thread.Sleep(10);
-                    }
-                }
-            }
-
-            return (!isCrossbarAvailable.HasValue) ? false : isCrossbarAvailable.Value;
-        }
-    }
-
-    /// <summary>
-    /// Simulates an external trigger.
-    /// </summary>
-    ///
-    /// <remarks><para>The method simulates external trigger for video cameras, which support
-    /// providing still image snapshots. The effect is equivalent as pressing camera's shutter
-    /// button - a snapshot will be provided through <see cref="SnapshotFrame"/> event.</para>
-    ///
-    /// <para><note>The <see cref="ProvideSnapshots"/> property must be set to <see langword="true"/>
-    /// to enable receiving snapshots.</note></para>
-    /// </remarks>
-    ///
-    public void SimulateTrigger()
-    {
-        needToSimulateTrigger = true;
-    }
-
-    /// <summary>
-    /// Sets a specified property on the camera.
-    /// </summary>
-    ///
-    /// <param name="property">Specifies the property to set.</param>
-    /// <param name="value">Specifies the new value of the property.</param>
-    /// <param name="controlFlags">Specifies the desired control setting.</param>
-    ///
-    /// <returns>Returns true on sucee or false otherwise.</returns>
-    ///
-    /// <exception cref="ArgumentException">Video source is not specified - device moniker is not set.</exception>
-    /// <exception cref="ApplicationException">Failed creating device object for moniker.</exception>
-    /// <exception cref="NotSupportedException">The video source does not support camera control.</exception>
-    ///
-    public bool SetCameraProperty(CameraControlProperty property, int value, CameraControlFlags controlFlags)
-    {
-        bool ret = true;
-
-        // check if source was set
-        if ((deviceMoniker == null) || (string.IsNullOrEmpty(deviceMoniker)))
-        {
-            throw new ArgumentException("Video source is not specified.");
-        }
-
-        lock (sync)
-        {
-            object tempSourceObject = null;
-
-            // create source device's object
-            try
-            {
-                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
-            }
-            catch
-            {
-                throw new ApplicationException("Failed creating device object for moniker.");
-            }
-
-            if (!(tempSourceObject is IAMCameraControl))
-            {
-                throw new NotSupportedException("The video source does not support camera control.");
-            }
-
-            IAMCameraControl pCamControl = (IAMCameraControl)tempSourceObject;
-            int hr = pCamControl.Set(property, value, controlFlags);
-
-            ret = (hr >= 0);
-
-            Marshal.ReleaseComObject(tempSourceObject);
-        }
-
-        return ret;
     }
 
     /// <summary>
@@ -1005,6 +839,529 @@ public class VideoCaptureDevice : IVideoSource
         }
 
         return ret;
+    }
+
+    /// <summary>
+    /// Sets a specified property on the camera.
+    /// </summary>
+    ///
+    /// <param name="property">Specifies the property to set.</param>
+    /// <param name="value">Specifies the new value of the property.</param>
+    /// <param name="controlFlags">Specifies the desired control setting.</param>
+    ///
+    /// <returns>Returns true on sucee or false otherwise.</returns>
+    ///
+    /// <exception cref="ArgumentException">Video source is not specified - device moniker is not set.</exception>
+    /// <exception cref="ApplicationException">Failed creating device object for moniker.</exception>
+    /// <exception cref="NotSupportedException">The video source does not support camera control.</exception>
+    ///
+    public bool SetCameraProperty(CameraControlProperty property, int value, CameraControlFlags controlFlags)
+    {
+        bool ret = true;
+
+        // check if source was set
+        if ((deviceMoniker == null) || (string.IsNullOrEmpty(deviceMoniker)))
+        {
+            throw new ArgumentException("Video source is not specified.");
+        }
+
+        lock (sync)
+        {
+            object tempSourceObject = null;
+
+            // create source device's object
+            try
+            {
+                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
+            }
+            catch
+            {
+                throw new ApplicationException("Failed creating device object for moniker.");
+            }
+
+            if (!(tempSourceObject is IAMCameraControl))
+            {
+                throw new NotSupportedException("The video source does not support camera control.");
+            }
+
+            IAMCameraControl pCamControl = (IAMCameraControl)tempSourceObject;
+            int hr = pCamControl.Set(property, value, controlFlags);
+
+            ret = (hr >= 0);
+
+            Marshal.ReleaseComObject(tempSourceObject);
+        }
+
+        return ret;
+    }
+
+    /// <summary>
+    /// Signal video source to stop its work.
+    /// </summary>
+    ///
+    /// <remarks>Signals video source to stop its background thread, stop to
+    /// provide new frames and free resources.</remarks>
+    ///
+    public void SignalToStop()
+    {
+        // stop thread
+        if (thread != null)
+        {
+            // signal to stop
+            stopEvent.Set();
+        }
+    }
+
+    /// <summary>
+    /// Simulates an external trigger.
+    /// </summary>
+    ///
+    /// <remarks><para>The method simulates external trigger for video cameras, which support
+    /// providing still image snapshots. The effect is equivalent as pressing camera's shutter
+    /// button - a snapshot will be provided through <see cref="SnapshotFrame"/> event.</para>
+    ///
+    /// <para><note>The <see cref="ProvideSnapshots"/> property must be set to <see langword="true"/>
+    /// to enable receiving snapshots.</note></para>
+    /// </remarks>
+    ///
+    public void SimulateTrigger()
+    {
+        needToSimulateTrigger = true;
+    }
+
+    /// <summary>
+    /// Start video source.
+    /// </summary>
+    ///
+    /// <remarks>Starts video source and return execution to caller. Video source
+    /// object creates background thread and notifies about new frames with the
+    /// help of <see cref="NewFrame"/> event.</remarks>
+    ///
+    public void Start()
+    {
+        if (!IsRunning)
+        {
+            // check source
+            if (string.IsNullOrEmpty(deviceMoniker))
+                throw new ArgumentException("Video source is not specified.");
+
+            framesReceived = 0;
+            bytesReceived = 0;
+            isCrossbarAvailable = null;
+            needToSetVideoInput = true;
+
+            // create events
+            stopEvent = new ManualResetEvent(false);
+
+            lock (sync)
+            {
+                // create and start new thread
+                thread = new Thread(new ThreadStart(WorkerThread));
+                thread.Name = deviceMoniker; // mainly for debugging
+                thread.Start();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stop video source.
+    /// </summary>
+    ///
+    /// <remarks><para>Stops video source aborting its thread.</para>
+    ///
+    /// <para><note>Since the method aborts background thread, its usage is highly not preferred
+    /// and should be done only if there are no other options. The correct way of stopping camera
+    /// is <see cref="SignalToStop">signaling it stop</see> and then
+    /// <see cref="WaitForStop">waiting</see> for background thread's completion.</note></para>
+    /// </remarks>
+    ///
+    public void Stop()
+    {
+        if (this.IsRunning)
+        {
+            thread.Abort();
+            WaitForStop();
+        }
+    }
+
+    /// <summary>
+    /// Wait for video source has stopped.
+    /// </summary>
+    ///
+    /// <remarks>Waits for source stopping after it was signalled to stop using
+    /// <see cref="SignalToStop"/> method.</remarks>
+    ///
+    public void WaitForStop()
+    {
+        if (thread != null)
+        {
+            // wait for thread stop
+            thread.Join();
+
+            Free();
+        }
+    }
+
+    // Collect all video inputs of the specified crossbar
+    private VideoInput[] ColletCrossbarVideoInputs(IAMCrossbar crossbar)
+    {
+        lock (cacheCrossbarVideoInputs)
+        {
+            if (cacheCrossbarVideoInputs.ContainsKey(deviceMoniker))
+            {
+                return cacheCrossbarVideoInputs[deviceMoniker];
+            }
+
+            List<VideoInput> videoInputsList = new List<VideoInput>();
+
+            if (crossbar != null)
+            {
+                int inPinsCount, outPinsCount;
+
+                // gen number of pins in the crossbar
+                if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
+                {
+                    // collect all video inputs
+                    for (int i = 0; i < inPinsCount; i++)
+                    {
+                        int pinIndexRelated;
+                        PhysicalConnectorType type;
+
+                        if (crossbar.get_CrossbarPinInfo(true, i, out pinIndexRelated, out type) != 0)
+                            continue;
+
+                        if (type < PhysicalConnectorType.AudioTuner)
+                        {
+                            videoInputsList.Add(new VideoInput(i, type));
+                        }
+                    }
+                }
+            }
+
+            VideoInput[] videoInputs = new VideoInput[videoInputsList.Count];
+            videoInputsList.CopyTo(videoInputs);
+
+            cacheCrossbarVideoInputs.Add(deviceMoniker, videoInputs);
+
+            return videoInputs;
+        }
+    }
+
+    // Display property page for the specified object
+    private void DisplayPropertyPage(IntPtr parentWindow, object sourceObject)
+    {
+        try
+        {
+            // retrieve ISpecifyPropertyPages interface of the device
+            ISpecifyPropertyPages pPropPages = (ISpecifyPropertyPages)sourceObject;
+
+            // get property pages from the property bag
+            CAUUID caGUID;
+            pPropPages.GetPages(out caGUID);
+
+            // get filter info
+            FilterInfo filterInfo = new FilterInfo(deviceMoniker);
+
+            // create and display the OlePropertyFrame
+            Win32.OleCreatePropertyFrame(parentWindow, 0, 0, filterInfo.Name, 1, ref sourceObject, caGUID.cElems, caGUID.pElems, 0, 0, IntPtr.Zero);
+
+            // release COM objects
+            Marshal.FreeCoTaskMem(caGUID.pElems);
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>
+    /// Free resource.
+    /// </summary>
+    ///
+    private void Free()
+    {
+        thread = null;
+
+        // release events
+        stopEvent.Close();
+        stopEvent = null;
+    }
+
+    // Get type of input connected to video output of the crossbar
+    private VideoInput GetCurrentCrossbarInput(IAMCrossbar crossbar)
+    {
+        VideoInput videoInput = VideoInput.Default;
+
+        int inPinsCount, outPinsCount;
+
+        // gen number of pins in the crossbar
+        if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
+        {
+            int videoOutputPinIndex = -1;
+            int pinIndexRelated;
+            PhysicalConnectorType type;
+
+            // find index of the video output pin
+            for (int i = 0; i < outPinsCount; i++)
+            {
+                if (crossbar.get_CrossbarPinInfo(false, i, out pinIndexRelated, out type) != 0)
+                    continue;
+
+                if (type == PhysicalConnectorType.VideoDecoder)
+                {
+                    videoOutputPinIndex = i;
+                    break;
+                }
+            }
+
+            if (videoOutputPinIndex != -1)
+            {
+                int videoInputPinIndex;
+
+                // get index of the input pin connected to the output
+                if (crossbar.get_IsRoutedTo(videoOutputPinIndex, out videoInputPinIndex) == 0)
+                {
+                    PhysicalConnectorType inputType;
+
+                    crossbar.get_CrossbarPinInfo(true, videoInputPinIndex, out pinIndexRelated, out inputType);
+
+                    videoInput = new VideoInput(videoInputPinIndex, inputType);
+                }
+            }
+        }
+
+        return videoInput;
+    }
+
+    // Configure specified pin and collect its capabilities if required
+    private void GetPinCapabilitiesAndConfigureSizeAndRate(ICaptureGraphBuilder2 graphBuilder, IBaseFilter baseFilter,
+        Guid pinCategory, VideoCapabilities resolutionToSet, ref VideoCapabilities[] capabilities)
+    {
+        object streamConfigObject;
+        graphBuilder.FindInterface(pinCategory, MediaType.Video, baseFilter, typeof(IAMStreamConfig).GUID, out streamConfigObject);
+
+        if (streamConfigObject != null)
+        {
+            IAMStreamConfig streamConfig = null;
+
+            try
+            {
+                streamConfig = (IAMStreamConfig)streamConfigObject;
+            }
+            catch (InvalidCastException)
+            {
+            }
+
+            if (streamConfig != null)
+            {
+                if (capabilities == null)
+                {
+                    try
+                    {
+                        // get all video capabilities
+                        capabilities = BISP.Video.DirectShow.VideoCapabilities.FromStreamConfig(streamConfig);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                // check if it is required to change capture settings
+                if (resolutionToSet != null)
+                {
+                    SetResolution(streamConfig, resolutionToSet);
+                }
+            }
+
+            Marshal.ReleaseComObject(streamConfigObject);
+        }
+
+        // if failed resolving capabilities, then just create empty capabilities array,
+        // so we don't try again
+        if (capabilities == null)
+        {
+            capabilities = new VideoCapabilities[0];
+        }
+    }
+
+    // Check if the filter can provide JPEG encoded images
+    private bool IsJpegEncodingAvailable(IBaseFilter baseFilter)
+    {
+        bool ret = false;
+        IEnumPins pinEnum = null;
+        IPin[] pins = new IPin[1];
+        int pinsFetched;
+
+        if ((baseFilter.EnumPins(out pinEnum) == 0) && (pinEnum != null))
+        {
+            try
+            {
+                while ((pinEnum.Next(1, pins, out pinsFetched) == 0) && (!ret))
+                {
+                    PinDirection pinDir;
+
+                    if ((pins[0].QueryDirection(out pinDir) == 0) && (pinDir == PinDirection.Output))
+                    {
+                        // enum preferred media types of the pin
+                        IEnumMediaTypes mediaEnum = null;
+                        AMMediaType[] mediaTypes = new AMMediaType[1];
+                        int typesFetched;
+
+                        if (pins[0].EnumMediaTypes(out mediaEnum) == 0)
+                        {
+                            try
+                            {
+                                while ((mediaEnum.Next(1, mediaTypes, out typesFetched) == 0) && (!ret))
+                                {
+                                    if ((mediaTypes[0].MajorType == MediaType.Video) && (mediaTypes[0].SubType == MediaSubType.MJpeg))
+                                    {
+                                        ret = true;
+                                    }
+
+                                    mediaTypes[0].Dispose();
+                                }
+                            }
+                            finally
+                            {
+                                Marshal.ReleaseComObject(mediaEnum);
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(pinEnum);
+            }
+        }
+
+        return ret;
+    }
+
+    /// <summary>
+    /// Notifies clients about new frame.
+    /// </summary>
+    ///
+    /// <param name="image">New frame's image.</param>
+    ///
+    private void OnNewFrame(Bitmap image)
+    {
+        framesReceived++;
+        bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
+
+        if ((!stopEvent.WaitOne(0, false)) && (NewFrame != null))
+            NewFrame(this, new NewFrameEventArgs(image));
+    }
+
+    /// <summary>
+    /// Notifies clients about new snapshot frame.
+    /// </summary>
+    ///
+    /// <param name="image">New snapshot's image.</param>
+    ///
+    private void OnSnapshotFrame(Bitmap image)
+    {
+        TimeSpan timeSinceStarted = DateTime.Now - startTime;
+
+        // TODO: need to find better way to ignore the first snapshot, which is sent
+        // automatically (or better disable it)
+        if (timeSinceStarted.TotalSeconds >= 4)
+        {
+            if ((!stopEvent.WaitOne(0, false)) && (SnapshotFrame != null))
+                SnapshotFrame(this, new NewFrameEventArgs(image));
+        }
+    }
+
+    // Set type of input connected to video output of the crossbar
+    private void SetCurrentCrossbarInput(IAMCrossbar crossbar, VideoInput videoInput)
+    {
+        if (videoInput.Type != PhysicalConnectorType.Default)
+        {
+            int inPinsCount, outPinsCount;
+
+            // gen number of pins in the crossbar
+            if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
+            {
+                int videoOutputPinIndex = -1;
+                int videoInputPinIndex = -1;
+                int pinIndexRelated;
+                PhysicalConnectorType type;
+
+                // find index of the video output pin
+                for (int i = 0; i < outPinsCount; i++)
+                {
+                    if (crossbar.get_CrossbarPinInfo(false, i, out pinIndexRelated, out type) != 0)
+                        continue;
+
+                    if (type == PhysicalConnectorType.VideoDecoder)
+                    {
+                        videoOutputPinIndex = i;
+                        break;
+                    }
+                }
+
+                // find index of the required input pin
+                for (int i = 0; i < inPinsCount; i++)
+                {
+                    if (crossbar.get_CrossbarPinInfo(true, i, out pinIndexRelated, out type) != 0)
+                        continue;
+
+                    if ((type == videoInput.Type) && (i == videoInput.Index))
+                    {
+                        videoInputPinIndex = i;
+                        break;
+                    }
+                }
+
+                // try connecting pins
+                if ((videoInputPinIndex != -1) && (videoOutputPinIndex != -1) &&
+                     (crossbar.CanRoute(videoOutputPinIndex, videoInputPinIndex) == 0))
+                {
+                    crossbar.Route(videoOutputPinIndex, videoInputPinIndex);
+                }
+            }
+        }
+    }
+
+    // Set resolution for the specified stream configuration
+    private void SetResolution(IAMStreamConfig streamConfig, VideoCapabilities resolution)
+    {
+        if (resolution == null)
+        {
+            return;
+        }
+
+        // iterate through device's capabilities to find mediaType for desired resolution
+        int capabilitiesCount = 0, capabilitySize = 0;
+        AMMediaType newMediaType = null;
+        VideoStreamConfigCaps caps = new VideoStreamConfigCaps();
+
+        streamConfig.GetNumberOfCapabilities(out capabilitiesCount, out capabilitySize);
+
+        for (int i = 0; i < capabilitiesCount; i++)
+        {
+            try
+            {
+                VideoCapabilities vc = new VideoCapabilities(streamConfig, i);
+
+                if (resolution == vc)
+                {
+                    if (streamConfig.GetStreamCaps(i, out newMediaType, caps) == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // set the new format
+        if (newMediaType != null)
+        {
+            streamConfig.SetFormat(newMediaType);
+            newMediaType.Dispose();
+        }
     }
 
     /// <summary>
@@ -1366,355 +1723,6 @@ public class VideoCaptureDevice : IVideoSource
         jpegEncodingEnabled = false;
     }
 
-    // Check if the filter can provide JPEG encoded images
-    private bool IsJpegEncodingAvailable(IBaseFilter baseFilter)
-    {
-        bool ret = false;
-        IEnumPins pinEnum = null;
-        IPin[] pins = new IPin[1];
-        int pinsFetched;
-
-        if ((baseFilter.EnumPins(out pinEnum) == 0) && (pinEnum != null))
-        {
-            try
-            {
-                while ((pinEnum.Next(1, pins, out pinsFetched) == 0) && (!ret))
-                {
-                    PinDirection pinDir;
-
-                    if ((pins[0].QueryDirection(out pinDir) == 0) && (pinDir == PinDirection.Output))
-                    {
-                        // enum preferred media types of the pin
-                        IEnumMediaTypes mediaEnum = null;
-                        AMMediaType[] mediaTypes = new AMMediaType[1];
-                        int typesFetched;
-
-                        if (pins[0].EnumMediaTypes(out mediaEnum) == 0)
-                        {
-                            try
-                            {
-                                while ((mediaEnum.Next(1, mediaTypes, out typesFetched) == 0) && (!ret))
-                                {
-                                    if ((mediaTypes[0].MajorType == MediaType.Video) && (mediaTypes[0].SubType == MediaSubType.MJpeg))
-                                    {
-                                        ret = true;
-                                    }
-
-                                    mediaTypes[0].Dispose();
-                                }
-                            }
-                            finally
-                            {
-                                Marshal.ReleaseComObject(mediaEnum);
-                            }
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(pinEnum);
-            }
-        }
-
-        return ret;
-    }
-
-    // Set resolution for the specified stream configuration
-    private void SetResolution(IAMStreamConfig streamConfig, VideoCapabilities resolution)
-    {
-        if (resolution == null)
-        {
-            return;
-        }
-
-        // iterate through device's capabilities to find mediaType for desired resolution
-        int capabilitiesCount = 0, capabilitySize = 0;
-        AMMediaType newMediaType = null;
-        VideoStreamConfigCaps caps = new VideoStreamConfigCaps();
-
-        streamConfig.GetNumberOfCapabilities(out capabilitiesCount, out capabilitySize);
-
-        for (int i = 0; i < capabilitiesCount; i++)
-        {
-            try
-            {
-                VideoCapabilities vc = new VideoCapabilities(streamConfig, i);
-
-                if (resolution == vc)
-                {
-                    if (streamConfig.GetStreamCaps(i, out newMediaType, caps) == 0)
-                    {
-                        break;
-                    }
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        // set the new format
-        if (newMediaType != null)
-        {
-            streamConfig.SetFormat(newMediaType);
-            newMediaType.Dispose();
-        }
-    }
-
-    // Configure specified pin and collect its capabilities if required
-    private void GetPinCapabilitiesAndConfigureSizeAndRate(ICaptureGraphBuilder2 graphBuilder, IBaseFilter baseFilter,
-        Guid pinCategory, VideoCapabilities resolutionToSet, ref VideoCapabilities[] capabilities)
-    {
-        object streamConfigObject;
-        graphBuilder.FindInterface(pinCategory, MediaType.Video, baseFilter, typeof(IAMStreamConfig).GUID, out streamConfigObject);
-
-        if (streamConfigObject != null)
-        {
-            IAMStreamConfig streamConfig = null;
-
-            try
-            {
-                streamConfig = (IAMStreamConfig)streamConfigObject;
-            }
-            catch (InvalidCastException)
-            {
-            }
-
-            if (streamConfig != null)
-            {
-                if (capabilities == null)
-                {
-                    try
-                    {
-                        // get all video capabilities
-                        capabilities = BISP.Video.DirectShow.VideoCapabilities.FromStreamConfig(streamConfig);
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                // check if it is required to change capture settings
-                if (resolutionToSet != null)
-                {
-                    SetResolution(streamConfig, resolutionToSet);
-                }
-            }
-
-            Marshal.ReleaseComObject(streamConfigObject);
-        }
-
-        // if failed resolving capabilities, then just create empty capabilities array,
-        // so we don't try again
-        if (capabilities == null)
-        {
-            capabilities = new VideoCapabilities[0];
-        }
-    }
-
-    // Display property page for the specified object
-    private void DisplayPropertyPage(IntPtr parentWindow, object sourceObject)
-    {
-        try
-        {
-            // retrieve ISpecifyPropertyPages interface of the device
-            ISpecifyPropertyPages pPropPages = (ISpecifyPropertyPages)sourceObject;
-
-            // get property pages from the property bag
-            CAUUID caGUID;
-            pPropPages.GetPages(out caGUID);
-
-            // get filter info
-            FilterInfo filterInfo = new FilterInfo(deviceMoniker);
-
-            // create and display the OlePropertyFrame
-            Win32.OleCreatePropertyFrame(parentWindow, 0, 0, filterInfo.Name, 1, ref sourceObject, caGUID.cElems, caGUID.pElems, 0, 0, IntPtr.Zero);
-
-            // release COM objects
-            Marshal.FreeCoTaskMem(caGUID.pElems);
-        }
-        catch
-        {
-        }
-    }
-
-    // Collect all video inputs of the specified crossbar
-    private VideoInput[] ColletCrossbarVideoInputs(IAMCrossbar crossbar)
-    {
-        lock (cacheCrossbarVideoInputs)
-        {
-            if (cacheCrossbarVideoInputs.ContainsKey(deviceMoniker))
-            {
-                return cacheCrossbarVideoInputs[deviceMoniker];
-            }
-
-            List<VideoInput> videoInputsList = new List<VideoInput>();
-
-            if (crossbar != null)
-            {
-                int inPinsCount, outPinsCount;
-
-                // gen number of pins in the crossbar
-                if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
-                {
-                    // collect all video inputs
-                    for (int i = 0; i < inPinsCount; i++)
-                    {
-                        int pinIndexRelated;
-                        PhysicalConnectorType type;
-
-                        if (crossbar.get_CrossbarPinInfo(true, i, out pinIndexRelated, out type) != 0)
-                            continue;
-
-                        if (type < PhysicalConnectorType.AudioTuner)
-                        {
-                            videoInputsList.Add(new VideoInput(i, type));
-                        }
-                    }
-                }
-            }
-
-            VideoInput[] videoInputs = new VideoInput[videoInputsList.Count];
-            videoInputsList.CopyTo(videoInputs);
-
-            cacheCrossbarVideoInputs.Add(deviceMoniker, videoInputs);
-
-            return videoInputs;
-        }
-    }
-
-    // Get type of input connected to video output of the crossbar
-    private VideoInput GetCurrentCrossbarInput(IAMCrossbar crossbar)
-    {
-        VideoInput videoInput = VideoInput.Default;
-
-        int inPinsCount, outPinsCount;
-
-        // gen number of pins in the crossbar
-        if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
-        {
-            int videoOutputPinIndex = -1;
-            int pinIndexRelated;
-            PhysicalConnectorType type;
-
-            // find index of the video output pin
-            for (int i = 0; i < outPinsCount; i++)
-            {
-                if (crossbar.get_CrossbarPinInfo(false, i, out pinIndexRelated, out type) != 0)
-                    continue;
-
-                if (type == PhysicalConnectorType.VideoDecoder)
-                {
-                    videoOutputPinIndex = i;
-                    break;
-                }
-            }
-
-            if (videoOutputPinIndex != -1)
-            {
-                int videoInputPinIndex;
-
-                // get index of the input pin connected to the output
-                if (crossbar.get_IsRoutedTo(videoOutputPinIndex, out videoInputPinIndex) == 0)
-                {
-                    PhysicalConnectorType inputType;
-
-                    crossbar.get_CrossbarPinInfo(true, videoInputPinIndex, out pinIndexRelated, out inputType);
-
-                    videoInput = new VideoInput(videoInputPinIndex, inputType);
-                }
-            }
-        }
-
-        return videoInput;
-    }
-
-    // Set type of input connected to video output of the crossbar
-    private void SetCurrentCrossbarInput(IAMCrossbar crossbar, VideoInput videoInput)
-    {
-        if (videoInput.Type != PhysicalConnectorType.Default)
-        {
-            int inPinsCount, outPinsCount;
-
-            // gen number of pins in the crossbar
-            if (crossbar.get_PinCounts(out outPinsCount, out inPinsCount) == 0)
-            {
-                int videoOutputPinIndex = -1;
-                int videoInputPinIndex = -1;
-                int pinIndexRelated;
-                PhysicalConnectorType type;
-
-                // find index of the video output pin
-                for (int i = 0; i < outPinsCount; i++)
-                {
-                    if (crossbar.get_CrossbarPinInfo(false, i, out pinIndexRelated, out type) != 0)
-                        continue;
-
-                    if (type == PhysicalConnectorType.VideoDecoder)
-                    {
-                        videoOutputPinIndex = i;
-                        break;
-                    }
-                }
-
-                // find index of the required input pin
-                for (int i = 0; i < inPinsCount; i++)
-                {
-                    if (crossbar.get_CrossbarPinInfo(true, i, out pinIndexRelated, out type) != 0)
-                        continue;
-
-                    if ((type == videoInput.Type) && (i == videoInput.Index))
-                    {
-                        videoInputPinIndex = i;
-                        break;
-                    }
-                }
-
-                // try connecting pins
-                if ((videoInputPinIndex != -1) && (videoOutputPinIndex != -1) &&
-                     (crossbar.CanRoute(videoOutputPinIndex, videoInputPinIndex) == 0))
-                {
-                    crossbar.Route(videoOutputPinIndex, videoInputPinIndex);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Notifies clients about new frame.
-    /// </summary>
-    ///
-    /// <param name="image">New frame's image.</param>
-    ///
-    private void OnNewFrame(Bitmap image)
-    {
-        framesReceived++;
-        bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
-
-        if ((!stopEvent.WaitOne(0, false)) && (NewFrame != null))
-            NewFrame(this, new NewFrameEventArgs(image));
-    }
-
-    /// <summary>
-    /// Notifies clients about new snapshot frame.
-    /// </summary>
-    ///
-    /// <param name="image">New snapshot's image.</param>
-    ///
-    private void OnSnapshotFrame(Bitmap image)
-    {
-        TimeSpan timeSinceStarted = DateTime.Now - startTime;
-
-        // TODO: need to find better way to ignore the first snapshot, which is sent
-        // automatically (or better disable it)
-        if (timeSinceStarted.TotalSeconds >= 4)
-        {
-            if ((!stopEvent.WaitOne(0, false)) && (SnapshotFrame != null))
-                SnapshotFrame(this, new NewFrameEventArgs(image));
-        }
-    }
-
     //
     // Video grabber
     //
@@ -1724,11 +1732,11 @@ public class VideoCaptureDevice : IVideoSource
         private bool snapshotMode;
         private int width, height;
 
-        // Width property
-        public int Width
+        // Constructor
+        public Grabber(VideoCaptureDevice parent, bool snapshotMode)
         {
-            get { return width; }
-            set { width = value; }
+            this.parent = parent;
+            this.snapshotMode = snapshotMode;
         }
 
         // Height property
@@ -1738,17 +1746,11 @@ public class VideoCaptureDevice : IVideoSource
             set { height = value; }
         }
 
-        // Constructor
-        public Grabber(VideoCaptureDevice parent, bool snapshotMode)
+        // Width property
+        public int Width
         {
-            this.parent = parent;
-            this.snapshotMode = snapshotMode;
-        }
-
-        // Callback to receive samples
-        public int SampleCB(double sampleTime, IntPtr sample)
-        {
-            return 0;
+            get { return width; }
+            set { width = value; }
         }
 
         // Callback method that receives a pointer to the sample buffer
@@ -1814,6 +1816,12 @@ public class VideoCaptureDevice : IVideoSource
                 }
             }
 
+            return 0;
+        }
+
+        // Callback to receive samples
+        public int SampleCB(double sampleTime, IntPtr sample)
+        {
             return 0;
         }
     }

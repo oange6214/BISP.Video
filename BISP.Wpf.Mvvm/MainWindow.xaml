@@ -6,6 +6,7 @@
     xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
     xmlns:local="clr-namespace:BISP.Wpf.Mvvm"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="clr-namespace:BISP.CommonElementUI;assembly=BISP.CommonElementUI"
     xmlns:viewmodels="clr-namespace:BISP.Wpf.Mvvm.ViewModels"
     Title="MainWindow"
     Width="1500"
@@ -19,7 +20,9 @@
     </i:Interaction.Triggers>
 
     <Window.DataContext>
-        <viewmodels:MainViewModelC />
+        <!--<viewmodels:MainViewModel />-->
+        <viewmodels:MainViewModelWriteableBitmap />
+        <!--<viewmodels:MainViewModelChannel />-->
     </Window.DataContext>
 
     <Grid>
@@ -41,6 +44,11 @@
                 VerticalAlignment="Center"
                 Text="{Binding CurrentFPS, StringFormat={}{0:N2} FPS}" />
 
+            <!--<ui:DisplayModule
+                Grid.Row="1"
+                Width="1280"
+                Height="720"
+                DisplayedImage="{Binding VideoPlayer}" />-->
             <Image
                 Grid.Row="1"
                 Width="1280"
@@ -56,7 +64,9 @@
                 <ColumnDefinition />
             </Grid.ColumnDefinitions>
 
-            <UniformGrid Grid.Column="0" Rows="2">
+            <UniformGrid
+                Grid.Column="0"
+                Rows="2">
 
                 <Label
                     Width="167"
@@ -71,7 +81,9 @@
                     SelectedItem="{Binding CurrentDevice}" />
             </UniformGrid>
 
-            <UniformGrid Grid.Column="1" Rows="2">
+            <UniformGrid
+                Grid.Column="1"
+                Rows="2">
 
                 <Button
                     Width="67"
