@@ -11,6 +11,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Remove="Controls\**" />
+		<EmbeddedResource Remove="Controls\**" />
+		<None Remove="Controls\**" />
+		<Page Remove="Controls\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.122" />
 	</ItemGroup>
 
@@ -21,13 +28,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Controls\" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Reference Include="BISP.CommonElementUI">
-	    <HintPath>..\Shard\Bin\Debug\BISP.CommonElementUI.dll</HintPath>
-	  </Reference>
+		<Reference Include="BISP.CommonElementUI">
+			<HintPath>..\Shard\BISP.CommonElementUI.dll</HintPath>
+		</Reference>
 	</ItemGroup>
 
 </Project>
