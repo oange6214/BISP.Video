@@ -1,6 +1,5 @@
 ﻿using BISP.Video.DirectShow.Internals;
 using System.Drawing;
-using System.Runtime.InteropServices;
 
 namespace BISP.Video.DirectShow;
 

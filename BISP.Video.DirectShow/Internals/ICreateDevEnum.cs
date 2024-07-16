@@ -1,7 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// The <b>ICreateDevEnum</b> interface creates an enumerator for devices within a particular category,

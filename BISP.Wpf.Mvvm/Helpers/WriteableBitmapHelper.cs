@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using System.IO;
+﻿using System.IO;
 using System.Windows.Media.Imaging;
 
 namespace BISP.Wpf.Mvvm.Helpers;
@@ -31,12 +30,13 @@ public class WriteableBitmapHelper
 
     public static BitmapImage ConvertWriteableBitmapToBitmapImage(WriteableBitmap wbm)
     {
-        BitmapImage bmImage = new BitmapImage();
-        using MemoryStream stream = new MemoryStream();
-
+        BitmapImage bmImage = new();
+        using MemoryStream stream = new();
         PngBitmapEncoder encoder = new PngBitmapEncoder();
+
         encoder.Frames.Add(BitmapFrame.Create(wbm));
         encoder.Save(stream);
+
         bmImage.BeginInit();
         bmImage.CacheOption = BitmapCacheOption.OnLoad;
         bmImage.StreamSource = stream;

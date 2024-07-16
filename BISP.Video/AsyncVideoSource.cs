@@ -1,8 +1,5 @@
-﻿using BISP.Video.Core;
+﻿using System.Collections.Concurrent;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.Threading.Tasks;
-using System.Collections.Concurrent;
 
 namespace BISP.Video;
 
@@ -11,18 +8,18 @@ namespace BISP.Video;
 /// </summary>
 public class AsyncVideoSource : IVideoSource
 {
-    private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-    private readonly ConcurrentQueue<Bitmap> frameQueue = new ConcurrentQueue<Bitmap>();
-    private readonly IVideoSource nestedVideoSource;
-    private readonly Task processingTask;
+    private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+    private readonly ConcurrentQueue<Bitmap> _frameQueue = new ConcurrentQueue<Bitmap>();
+    private readonly IVideoSource _nestedVideoSource;
+    private readonly Task _processingTask;
 
     private int framesProcessed;
     private bool skipFramesIfBusy;
 
     public AsyncVideoSource(IVideoSource nestedVideoSource)
     {
-        this.nestedVideoSource = nestedVideoSource;
-        processingTask = Task.Run(ProcessFramesAsync, cancellationTokenSource.Token);
+        this._nestedVideoSource = nestedVideoSource;
+        _processingTask = Task.Run(ProcessFramesAsync, _cancellationTokenSource.Token);
     }
 
     public AsyncVideoSource(IVideoSource nestedVideoSource, bool skipFramesIfBusy) : this(nestedVideoSource)
@@ -34,17 +31,17 @@ public class AsyncVideoSource : IVideoSource
 
     public event PlayingFinishedEventHandler PlayingFinished
     {
-        add { nestedVideoSource.PlayingFinished += value; }
-        remove { nestedVideoSource.PlayingFinished -= value; }
+        add { _nestedVideoSource.PlayingFinished += value; }
+        remove { _nestedVideoSource.PlayingFinished -= value; }
     }
 
     public event VideoSourceErrorEventHandler VideoSourceError
     {
-        add { nestedVideoSource.VideoSourceError += value; }
-        remove { nestedVideoSource.VideoSourceError -= value; }
+        add { _nestedVideoSource.VideoSourceError += value; }
+        remove { _nestedVideoSource.VideoSourceError -= value; }
     }
 
-    public long BytesReceived => nestedVideoSource.BytesReceived;
+    public long BytesReceived => _nestedVideoSource.BytesReceived;
 
     public int FramesProcessed
     {
@@ -56,9 +53,9 @@ public class AsyncVideoSource : IVideoSource
         }
     }
 
-    public int FramesReceived => nestedVideoSource.FramesReceived;
-    public bool IsRunning => nestedVideoSource.IsRunning;
-    public IVideoSource NestedVideoSource => nestedVideoSource;
+    public int FramesReceived => _nestedVideoSource.FramesReceived;
+    public bool IsRunning => _nestedVideoSource.IsRunning;
+    public IVideoSource NestedVideoSource => _nestedVideoSource;
 
     public bool SkipFramesIfBusy
     {
@@ -66,12 +63,12 @@ public class AsyncVideoSource : IVideoSource
         set => skipFramesIfBusy = value;
     }
 
-    public string Source => nestedVideoSource.Source;
+    public string Source => _nestedVideoSource.Source;
 
     public void SignalToStop()
     {
-        nestedVideoSource.SignalToStop();
-        cancellationTokenSource.Cancel();
+        _nestedVideoSource.SignalToStop();
+        _cancellationTokenSource.Cancel();
     }
 
     public void Start()
@@ -79,20 +76,20 @@ public class AsyncVideoSource : IVideoSource
         if (!IsRunning)
         {
             framesProcessed = 0;
-            nestedVideoSource.NewFrame += NestedVideoSource_NewFrame;
-            nestedVideoSource.Start();
+            _nestedVideoSource.NewFrame += NestedVideoSource_NewFrame;
+            _nestedVideoSource.Start();
         }
     }
 
     public void Stop()
     {
-        nestedVideoSource.Stop();
+        _nestedVideoSource.Stop();
         Free();
     }
 
     public void WaitForStop()
     {
-        nestedVideoSource.WaitForStop();
+        _nestedVideoSource.WaitForStop();
         Free();
     }
 
@@ -108,9 +105,9 @@ public class AsyncVideoSource : IVideoSource
 
     private void Free()
     {
-        nestedVideoSource.NewFrame -= NestedVideoSource_NewFrame;
-        cancellationTokenSource.Cancel();
-        processingTask.Wait();
+        _nestedVideoSource.NewFrame -= NestedVideoSource_NewFrame;
+        _cancellationTokenSource.Cancel();
+        _processingTask.Wait();
     }
 
     private void NestedVideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs)
@@ -119,20 +116,20 @@ public class AsyncVideoSource : IVideoSource
 
         var clonedFrame = CloneImage(eventArgs.Frame);
 
-        if (skipFramesIfBusy && frameQueue.Count > 0)
+        if (skipFramesIfBusy && _frameQueue.Count > 0)
         {
             clonedFrame.Dispose();
             return;
         }
 
-        frameQueue.Enqueue(clonedFrame);
+        _frameQueue.Enqueue(clonedFrame);
     }
 
     private async Task ProcessFramesAsync()
     {
-        while (!cancellationTokenSource.Token.IsCancellationRequested)
+        while (!_cancellationTokenSource.Token.IsCancellationRequested)
         {
-            if (frameQueue.TryDequeue(out var frame))
+            if (_frameQueue.TryDequeue(out var frame))
             {
                 NewFrame?.Invoke(this, new NewFrameEventArgs(frame));
                 frame.Dispose();

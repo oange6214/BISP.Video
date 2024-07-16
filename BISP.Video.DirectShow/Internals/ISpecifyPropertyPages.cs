@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// The interface indicates that an object supports property pages.

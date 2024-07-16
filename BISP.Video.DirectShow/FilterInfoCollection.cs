@@ -1,7 +1,5 @@
 ﻿using BISP.Video.DirectShow.Internals;
 using System.Collections;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 
 namespace BISP.Video.DirectShow;
 

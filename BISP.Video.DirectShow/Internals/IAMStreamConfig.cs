@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// This interface sets the output format on certain capture and compression filters,

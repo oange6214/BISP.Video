@@ -5,7 +5,6 @@ using BISP.Wpf.Mvvm.Toolkit.Mvvm;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using System.Windows;
 using System.Windows.Media.Imaging;

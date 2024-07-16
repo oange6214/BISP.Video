@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// This interface provides methods that enable an application to build a filter graph.

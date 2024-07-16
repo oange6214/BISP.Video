@@ -16,4 +16,8 @@
 	  <ProjectReference Include="..\BISP.Video\BISP.Video.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Enums\" />
+	</ItemGroup>
+
 </Project>

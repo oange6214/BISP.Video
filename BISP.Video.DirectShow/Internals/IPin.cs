@@ -1,13 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO.Pipes;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Runtime;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// This interface is exposed by all input and output pins of DirectShow filters.

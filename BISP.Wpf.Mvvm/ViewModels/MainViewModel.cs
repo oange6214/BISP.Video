@@ -4,7 +4,6 @@ using BISP.Wpf.Mvvm.Helpers;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm;
 using BISP.Wpf.Mvvm.Toolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -92,7 +91,7 @@ public class MainViewModel : ObservableObject
         BitmapSource bi;
         using (var bitmap = (Bitmap)eventArgs.Frame.Clone())
         {
-            bi = bitmap.ToBitmapSource();
+            bi = bitmap.ToBitmapSourceMarshal();
             bi.Freeze(); // avoid cross thread operations and prevents leaks
         }
 

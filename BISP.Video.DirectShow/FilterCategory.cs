@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices;
-
-namespace BISP.Video.DirectShow;
+﻿namespace BISP.Video.DirectShow;
 
 //
 // Summary:

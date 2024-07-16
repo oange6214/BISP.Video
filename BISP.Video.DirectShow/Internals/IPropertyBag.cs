@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 /// <summary>
 /// The <b>IPropertyBag</b> interface provides an object with a property bag in

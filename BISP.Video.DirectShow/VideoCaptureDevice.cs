@@ -41,6 +41,8 @@ namespace BISP.Video.DirectShow;
 
 public class VideoCaptureDevice : IVideoSource
 {
+    private const int SMALL_IMAGE_THRESHOLD = 1000000;
+
     private static Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
 
     private static Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
@@ -1775,16 +1777,30 @@ public class VideoCaptureDevice : IVideoSource
                     int srcStride = imageData.Stride;
                     int dstStride = imageData.Stride;
 
+                    bool isSmallImage = width * height <= SMALL_IMAGE_THRESHOLD;
+
                     unsafe
                     {
-                        byte* dst = (byte*)imageData.Scan0.ToPointer() + dstStride * (height - 1);
-                        byte* src = (byte*)buffer.ToPointer();
+                        byte* dstStart = (byte*)imageData.Scan0.ToPointer();
+                        byte* srcStart = (byte*)buffer.ToPointer();
 
-                        for (int y = 0; y < height; y++)
+                        if (isSmallImage)
                         {
-                            Win32.memcpy(dst, src, srcStride);
-                            dst -= dstStride;
-                            src += srcStride;
+                            for (int y = 0; y < height; y++)
+                            {
+                                byte* dst = dstStart + (height - 1 - y) * dstStride;
+                                byte* src = srcStart + y * srcStride;
+                                Buffer.MemoryCopy(src, dst, srcStride, srcStride);
+                            }
+                        }
+                        else
+                        {
+                            Parallel.For(0, height, y =>
+                            {
+                                byte* dst = dstStart + (height - 1 - y) * dstStride;
+                                byte* src = srcStart + y * srcStride;
+                                Buffer.MemoryCopy(src, dst, srcStride, srcStride);
+                            });
                         }
                     }
 

@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices;
-
-namespace BISP.Video.DirectShow.Internals;
+﻿namespace BISP.Video.DirectShow.Internals;
 
 // Custom marshaller used to interop different Direct Show APIs
 internal abstract class DSMarshaler : ICustomMarshaler
