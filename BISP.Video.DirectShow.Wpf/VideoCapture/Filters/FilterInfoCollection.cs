@@ -50,7 +50,7 @@ public class FilterInfoCollection : CollectionBase
     {
         get
         {
-            return ((FilterInfo)InnerList[index]);
+            return (FilterInfo)InnerList[index];
         }
     }
 
@@ -80,12 +80,12 @@ public class FilterInfoCollection : CollectionBase
                 throw new ApplicationException("No devices of the category");
 
             // Collect all filters
-            IntPtr n = IntPtr.Zero;
+            nint n = nint.Zero;
             while (true)
             {
                 // Get next filter
                 hr = enumMon.Next(1, devMon, n);
-                if ((hr != 0) || (devMon[0] == null))
+                if (hr != 0 || devMon[0] == null)
                     break;
 
                 // Add the filter

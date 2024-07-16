@@ -29,8 +29,5 @@ public class VideoInput
     /// <summary>
     /// Default video input. Used to specify that it should not be changed.
     /// </summary>
-    public static VideoInput Default
-    {
-        get { return new VideoInput(-1, PhysicalConnectorType.Default); }
-    }
+    public static VideoInput Default => new VideoInput(-1, PhysicalConnectorType.Default);
 }

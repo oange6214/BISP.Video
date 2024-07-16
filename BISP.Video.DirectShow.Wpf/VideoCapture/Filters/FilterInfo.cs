@@ -58,7 +58,7 @@ public class FilterInfo : IComparable
         if (f == null)
             return 1;
 
-        return (this.Name.CompareTo(f.Name));
+        return Name.CompareTo(f.Name);
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public class FilterInfo : IComparable
     //
     private string GetName(IMoniker moniker)
     {
-        Object bagObj = null;
+        object bagObj = null;
         IPropertyBag bag = null;
 
         try
@@ -125,13 +125,13 @@ public class FilterInfo : IComparable
 
             // read FriendlyName
             object val = "";
-            int hr = bag.Read("FriendlyName", ref val, IntPtr.Zero);
+            int hr = bag.Read("FriendlyName", ref val, nint.Zero);
             if (hr != 0)
                 Marshal.ThrowExceptionForHR(hr);
 
             // get it as string
             string ret = (string)val;
-            if ((ret == null) || (ret.Length < 1))
+            if (ret == null || ret.Length < 1)
                 throw new ApplicationException();
 
             return ret;
@@ -159,7 +159,7 @@ public class FilterInfo : IComparable
     {
         IBindCtx bindCtx = null;
         IMoniker moniker = null;
-        String name = "";
+        string name = "";
         int n = 0;
 
         // create bind context

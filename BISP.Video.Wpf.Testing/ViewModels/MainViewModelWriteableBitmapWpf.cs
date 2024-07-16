@@ -1,5 +1,4 @@
 ﻿using BISP.Video.DirectShow.Wpf;
-using BISP.Video.Wpf;
 using BISP.Video.Wpf.Testing.Helpers;
 using BISP.Video.Wpf.Testing.Toolkit.Mvvm;
 using BISP.Video.Wpf.Testing.Toolkit.Mvvm.Input;
@@ -23,12 +22,6 @@ public class MainViewModelWriteableBitmapWpf : ObservableObject
     private IRelayCommand _windowClosingCommand;
 
     #endregion Fields
-
-    public MainViewModelWriteableBitmapWpf()
-    {
-        _fpsHelper = new FpsHelper();
-        GetVideoDevices();
-    }
 
     #region Properties
 
@@ -59,6 +52,12 @@ public class MainViewModelWriteableBitmapWpf : ObservableObject
     public IRelayCommand WindowClosingCommand => _windowClosingCommand ??= new RelayCommand(CloseWindow);
 
     #endregion Properties
+
+    public MainViewModelWriteableBitmapWpf()
+    {
+        _fpsHelper = new FpsHelper();
+        GetVideoDevices();
+    }
 
     #region Private Methods
 
