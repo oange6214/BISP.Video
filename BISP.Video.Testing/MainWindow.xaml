@@ -1,0 +1,101 @@
+﻿<Window
+    x:Class="BISP.Video.Testing.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+    xmlns:local="clr-namespace:BISP.Video.Testing"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="clr-namespace:BISP.CommonElementUI;assembly=BISP.CommonElementUI"
+    xmlns:viewmodels="clr-namespace:BISP.Video.Testing.ViewModels"
+    Title="MainWindow"
+    Width="1500"
+    Height="900"
+    mc:Ignorable="d">
+
+    <i:Interaction.Triggers>
+        <i:EventTrigger EventName="Closing">
+            <i:InvokeCommandAction Command="{Binding WindowClosingCommand}" />
+        </i:EventTrigger>
+    </i:Interaction.Triggers>
+
+    <Window.DataContext>
+        <!--<viewmodels:MainViewModel />-->
+        <viewmodels:MainViewModelWriteableBitmap />
+        <!--<viewmodels:MainViewModelWriteableBitmapAsnyc />-->
+    </Window.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="80" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="50" />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+
+            <TextBlock
+                Grid.Row="0"
+                Margin="0,10,20,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Text="{Binding CurrentFPS, StringFormat={}{0:N2} FPS}" />
+
+            <!--<ui:DisplayModule
+                Grid.Row="1"
+                Width="1280"
+                Height="720"
+                DisplayedImage="{Binding VideoPlayer}" />-->
+            <Image
+                Grid.Row="1"
+                Width="1280"
+                Height="720"
+                RenderOptions.BitmapScalingMode="HighQuality"
+                RenderOptions.EdgeMode="Aliased"
+                Source="{Binding VideoPlayer}" />
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+
+            <UniformGrid
+                Grid.Column="0"
+                Rows="2">
+
+                <Label
+                    Width="167"
+                    Height="25"
+                    Content="Select video source" />
+
+                <ComboBox
+                    Width="167"
+                    Height="25"
+                    DisplayMemberPath="Name"
+                    ItemsSource="{Binding VideoDevices}"
+                    SelectedItem="{Binding CurrentDevice}" />
+            </UniformGrid>
+
+            <UniformGrid
+                Grid.Column="1"
+                Rows="2">
+
+                <Button
+                    Width="67"
+                    Height="25"
+                    Command="{Binding StartCommand}"
+                    Content="Start" />
+                <Button
+                    Width="67"
+                    Height="25"
+                    Command="{Binding StopCommand}"
+                    Content="Stop" />
+            </UniformGrid>
+        </Grid>
+    </Grid>
+</Window>

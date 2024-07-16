@@ -1,8 +1,13 @@
-﻿using BISP.Video.DirectShow.Internals;
+﻿using BISP.Video.DirectShow.Wpf.Internals;
+using BISP.Video.Wpf;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
+using System.Threading;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
-namespace BISP.Video.DirectShow;
+namespace BISP.Video.DirectShow.Wpf;
 
 /// <summary>
 /// Video source for local video capture device (for example USB webcam).
@@ -29,12 +34,6 @@ namespace BISP.Video.DirectShow;
 /// videoSource.SignalToStop( );
 /// // ...
 ///
-/// private void video_NewFrame( object sender, NewFrameEventArgs eventArgs )
-/// {
-///     // get new frame
-///     Bitmap bitmap = eventArgs.Frame;
-///     // process the frame
-/// }
 /// </code>
 /// </remarks>
 ///
@@ -1160,7 +1159,7 @@ public class VideoCaptureDevice : IVideoSource
                     try
                     {
                         // get all video capabilities
-                        capabilities = BISP.Video.DirectShow.VideoCapabilities.FromStreamConfig(streamConfig);
+                        capabilities = BISP.Video.DirectShow.Wpf.VideoCapabilities.FromStreamConfig(streamConfig);
                     }
                     catch
                     {
@@ -1245,13 +1244,15 @@ public class VideoCaptureDevice : IVideoSource
     ///
     /// <param name="image">New frame's image.</param>
     ///
-    private void OnNewFrame(Bitmap image)
+    private void OnNewFrame(WriteableBitmap image)
     {
         _framesReceived++;
-        _bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
+        _bytesReceived += image.PixelWidth * image.PixelHeight * (image.Format.BitsPerPixel >> 3);
 
-        if ((!_stopEvent.WaitOne(0, false)) && (NewFrame != null))
+        if (!_stopEvent.WaitOne(0, false) && NewFrame != null)
+        {
             NewFrame(this, new NewFrameEventArgs(image));
+        }
     }
 
     /// <summary>
@@ -1260,16 +1261,16 @@ public class VideoCaptureDevice : IVideoSource
     ///
     /// <param name="image">New snapshot's image.</param>
     ///
-    private void OnSnapshotFrame(Bitmap image)
+    private void OnSnapshotFrame(WriteableBitmap image)
     {
         TimeSpan timeSinceStarted = DateTime.Now - _startTime;
 
-        // TODO: need to find better way to ignore the first snapshot, which is sent
-        // automatically (or better disable it)
         if (timeSinceStarted.TotalSeconds >= 4)
         {
-            if ((!_stopEvent.WaitOne(0, false)) && (SnapshotFrame != null))
+            if (!_stopEvent.WaitOne(0, false) && SnapshotFrame != null)
+            {
                 SnapshotFrame(this, new NewFrameEventArgs(image));
+            }
         }
     }
 
@@ -1760,36 +1761,27 @@ public class VideoCaptureDevice : IVideoSource
         {
             if (parent.NewFrame != null)
             {
-                System.Drawing.Bitmap image = null;
+                WriteableBitmap image = null;
 
                 if (!parent._jpegEncodingEnabled)
                 {
-                    // create new image
-                    image = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+                    image = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr24, null);
 
-                    // lock bitmap data
-                    BitmapData imageData = image.LockBits(
-                        new Rectangle(0, 0, width, height),
-                        ImageLockMode.ReadWrite,
-                        PixelFormat.Format24bppRgb);
-
-                    // copy image data
-                    int srcStride = imageData.Stride;
-                    int dstStride = imageData.Stride;
-
-                    bool isSmallImage = width * height <= SMALL_IMAGE_THRESHOLD;
+                    image.Lock();
 
                     unsafe
                     {
-                        byte* dstStart = (byte*)imageData.Scan0.ToPointer();
                         byte* srcStart = (byte*)buffer.ToPointer();
+                        byte* dstStart = (byte*)image.BackBuffer.ToPointer();
+                        int srcStride = width * 3;
+                        int dstStride = image.BackBufferStride;
 
-                        if (isSmallImage)
+                        if (width * height <= SMALL_IMAGE_THRESHOLD)
                         {
                             for (int y = 0; y < height; y++)
                             {
-                                byte* dst = dstStart + (height - 1 - y) * dstStride;
                                 byte* src = srcStart + y * srcStride;
+                                byte* dst = dstStart + (height - 1 - y) * dstStride;
                                 Buffer.MemoryCopy(src, dst, srcStride, srcStride);
                             }
                         }
@@ -1797,27 +1789,29 @@ public class VideoCaptureDevice : IVideoSource
                         {
                             Parallel.For(0, height, y =>
                             {
-                                byte* dst = dstStart + (height - 1 - y) * dstStride;
                                 byte* src = srcStart + y * srcStride;
+                                byte* dst = dstStart + (height - 1 - y) * dstStride;
                                 Buffer.MemoryCopy(src, dst, srcStride, srcStride);
                             });
                         }
                     }
 
-                    // unlock bitmap data
-                    image.UnlockBits(imageData);
+                    image.AddDirtyRect(new System.Windows.Int32Rect(0, 0, width, height));
+                    image.Unlock();
                 }
                 else
                 {
                     unsafe
                     {
-                        image = (Bitmap)Bitmap.FromStream(new UnmanagedMemoryStream((byte*)buffer.ToPointer(), bufferLen));
+                        using var stream = new UnmanagedMemoryStream((byte*)buffer.ToPointer(), bufferLen);
+                        var decoder = new JpegBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                        var frame = decoder.Frames[0];
+                        image = new WriteableBitmap(frame);
                     }
                 }
 
                 if (image != null)
                 {
-                    // notify parent
                     if (snapshotMode)
                     {
                         parent.OnSnapshotFrame(image);
@@ -1826,12 +1820,8 @@ public class VideoCaptureDevice : IVideoSource
                     {
                         parent.OnNewFrame(image);
                     }
-
-                    // release the image
-                    image.Dispose();
                 }
             }
-
             return 0;
         }
 

@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Remove="Controls\**" />
+		<EmbeddedResource Remove="Controls\**" />
+		<None Remove="Controls\**" />
+		<Page Remove="Controls\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.122" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\BISP.Video.DirectShow.Wpf\BISP.Video.DirectShow.Wpf.csproj" />
+		<ProjectReference Include="..\BISP.Video.Wpf\BISP.Video.Wpf.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="BISP.CommonElementUI">
+			<HintPath>..\Shard\BISP.CommonElementUI.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+</Project>
