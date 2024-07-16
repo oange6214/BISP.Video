@@ -21,7 +21,8 @@
 
     <Window.DataContext>
         <!--<viewmodels:MainViewModel />-->
-        <viewmodels:MainViewModelWriteableBitmap />
+        <!--<viewmodels:MainViewModelWriteableBitmap />-->
+        <viewmodels:MainViewModelWriteableBitmapAsnyc />
         <!--<viewmodels:MainViewModelChannel />-->
     </Window.DataContext>
 

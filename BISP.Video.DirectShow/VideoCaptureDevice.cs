@@ -43,69 +43,69 @@ public class VideoCaptureDevice : IVideoSource
 {
     private const int SMALL_IMAGE_THRESHOLD = 1000000;
 
-    private static Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
+    private static Dictionary<string, VideoInput[]> _cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
 
-    private static Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
+    private static Dictionary<string, VideoCapabilities[]> _cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
 
     // cache for video/snapshot capabilities and video inputs
-    private static Dictionary<string, VideoCapabilities[]> cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
+    private static Dictionary<string, VideoCapabilities[]> _cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
 
     // recieved byte count
-    private long bytesReceived;
+    private long _bytesReceived;
 
-    private VideoInput crossbarVideoInput = VideoInput.Default;
+    private VideoInput _crossbarVideoInput = VideoInput.Default;
 
-    private VideoInput[] crossbarVideoInputs = null;
+    private VideoInput[] _crossbarVideoInputs = null;
 
     // moniker string of video capture device
-    private string deviceMoniker;
+    private string _deviceMoniker;
 
     // received frames count
-    private int framesReceived;
+    private int _framesReceived;
 
     // flag specifying if IAMCrossbar interface is supported by the running graph/source object
-    private bool? isCrossbarAvailable = null;
+    private bool? _isCrossbarAvailable = null;
 
     // check if JPEG encoding is enabled
-    private bool jpegEncodingEnabled = false;
+    private bool _jpegEncodingEnabled = false;
 
-    private bool needToDisplayCrossBarPropertyPage = false;
+    private bool _needToDisplayCrossBarPropertyPage = false;
 
-    private bool needToDisplayPropertyPage = false;
+    private bool _needToDisplayPropertyPage = false;
 
-    private bool needToSetVideoInput = false;
+    private bool _needToSetVideoInput = false;
 
-    private bool needToSimulateTrigger = false;
+    private bool _needToSimulateTrigger = false;
 
-    private IntPtr parentWindowForPropertyPage = IntPtr.Zero;
+    private IntPtr _parentWindowForPropertyPage = IntPtr.Zero;
 
     // JPEG encoding preference
-    private bool preferJpegEncoding = true;
+    private bool _preferJpegEncoding = true;
 
     // provide snapshots or not
-    private bool provideSnapshots = false;
+    private bool _provideSnapshots = false;
 
-    private VideoCapabilities[] snapshotCapabilities;
+    private VideoCapabilities[] _snapshotCapabilities;
 
-    private VideoCapabilities snapshotResolution = null;
+    private VideoCapabilities _snapshotResolution = null;
 
     // video capture source object
-    private object sourceObject = null;
+    private object _sourceObject = null;
 
     // time of starting the DirectX graph
-    private DateTime startTime = new DateTime();
+    private DateTime _startTime = new DateTime();
 
-    private ManualResetEvent stopEvent = null;
+    private ManualResetEvent _stopEvent = null;
 
     // dummy object to lock for synchronization
-    private object sync = new object();
+    private object _sync = new object();
 
-    private Thread thread = null;
+    private Thread _thread = null;
 
-    private VideoCapabilities[] videoCapabilities;
+    private VideoCapabilities[] _videoCapabilities;
 
     // video and snapshot resolutions to set
-    private VideoCapabilities videoResolution = null;
+    private VideoCapabilities _videoResolution = null;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VideoCaptureDevice"/> class.
@@ -122,7 +122,7 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public VideoCaptureDevice(string deviceMoniker)
     {
-        this.deviceMoniker = deviceMoniker;
+        this._deviceMoniker = deviceMoniker;
     }
 
     /// <summary>
@@ -196,17 +196,17 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            if (crossbarVideoInputs == null)
+            if (_crossbarVideoInputs == null)
             {
-                lock (cacheCrossbarVideoInputs)
+                lock (_cacheCrossbarVideoInputs)
                 {
-                    if ((!string.IsNullOrEmpty(deviceMoniker)) && (cacheCrossbarVideoInputs.ContainsKey(deviceMoniker)))
+                    if ((!string.IsNullOrEmpty(_deviceMoniker)) && (_cacheCrossbarVideoInputs.ContainsKey(_deviceMoniker)))
                     {
-                        crossbarVideoInputs = cacheCrossbarVideoInputs[deviceMoniker];
+                        _crossbarVideoInputs = _cacheCrossbarVideoInputs[_deviceMoniker];
                     }
                 }
 
-                if (crossbarVideoInputs == null)
+                if (_crossbarVideoInputs == null)
                 {
                     if (!IsRunning)
                     {
@@ -215,7 +215,7 @@ public class VideoCaptureDevice : IVideoSource
                     }
                     else
                     {
-                        for (int i = 0; (i < 500) && (crossbarVideoInputs == null); i++)
+                        for (int i = 0; (i < 500) && (_crossbarVideoInputs == null); i++)
                         {
                             Thread.Sleep(10);
                         }
@@ -223,7 +223,7 @@ public class VideoCaptureDevice : IVideoSource
                 }
             }
             // don't return null even if capabilities are not provided for some reason
-            return (crossbarVideoInputs != null) ? crossbarVideoInputs : new VideoInput[0];
+            return (_crossbarVideoInputs != null) ? _crossbarVideoInputs : new VideoInput[0];
         }
     }
 
@@ -239,8 +239,8 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            long bytes = bytesReceived;
-            bytesReceived = 0;
+            long bytes = _bytesReceived;
+            _bytesReceived = 0;
             return bytes;
         }
     }
@@ -265,11 +265,11 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public VideoInput CrossbarVideoInput
     {
-        get { return crossbarVideoInput; }
+        get { return _crossbarVideoInput; }
         set
         {
-            needToSetVideoInput = true;
-            crossbarVideoInput = value;
+            _needToSetVideoInput = true;
+            _crossbarVideoInput = value;
         }
     }
 
@@ -326,8 +326,8 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            int frames = framesReceived;
-            framesReceived = 0;
+            int frames = _framesReceived;
+            _framesReceived = 0;
             return frames;
         }
     }
@@ -342,13 +342,13 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            if (thread != null)
+            if (_thread != null)
             {
-                // check thread status
-                if (thread.Join(0) == false)
+                // check _thread status
+                if (_thread.Join(0) == false)
                     return true;
 
-                // the thread is not running, free resources
+                // the _thread is not running, free resources
                 Free();
             }
             return false;
@@ -390,8 +390,8 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public bool PreferJpegEncoding
     {
-        get { return preferJpegEncoding; }
-        set { preferJpegEncoding = value; }
+        get { return _preferJpegEncoding; }
+        set { _preferJpegEncoding = value; }
     }
 
     /// <summary>
@@ -414,8 +414,8 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public bool ProvideSnapshots
     {
-        get { return provideSnapshots; }
-        set { provideSnapshots = value; }
+        get { return _provideSnapshots; }
+        set { _provideSnapshots = value; }
     }
 
     /// <summary>
@@ -440,17 +440,17 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            if (snapshotCapabilities == null)
+            if (_snapshotCapabilities == null)
             {
-                lock (cacheSnapshotCapabilities)
+                lock (_cacheSnapshotCapabilities)
                 {
-                    if ((!string.IsNullOrEmpty(deviceMoniker)) && (cacheSnapshotCapabilities.ContainsKey(deviceMoniker)))
+                    if ((!string.IsNullOrEmpty(_deviceMoniker)) && (_cacheSnapshotCapabilities.ContainsKey(_deviceMoniker)))
                     {
-                        snapshotCapabilities = cacheSnapshotCapabilities[deviceMoniker];
+                        _snapshotCapabilities = _cacheSnapshotCapabilities[_deviceMoniker];
                     }
                 }
 
-                if (snapshotCapabilities == null)
+                if (_snapshotCapabilities == null)
                 {
                     if (!IsRunning)
                     {
@@ -460,7 +460,7 @@ public class VideoCaptureDevice : IVideoSource
                     }
                     else
                     {
-                        for (int i = 0; (i < 500) && (snapshotCapabilities == null); i++)
+                        for (int i = 0; (i < 500) && (_snapshotCapabilities == null); i++)
                         {
                             Thread.Sleep(10);
                         }
@@ -468,7 +468,7 @@ public class VideoCaptureDevice : IVideoSource
                 }
             }
             // don't return null even capabilities are not provided for some reason
-            return (snapshotCapabilities != null) ? snapshotCapabilities : new VideoCapabilities[0];
+            return (_snapshotCapabilities != null) ? _snapshotCapabilities : new VideoCapabilities[0];
         }
     }
 
@@ -487,8 +487,8 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public VideoCapabilities SnapshotResolution
     {
-        get { return snapshotResolution; }
-        set { snapshotResolution = value; }
+        get { return _snapshotResolution; }
+        set { _snapshotResolution = value; }
     }
 
     /// <summary>
@@ -499,15 +499,15 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public virtual string Source
     {
-        get { return deviceMoniker; }
+        get { return _deviceMoniker; }
         set
         {
-            deviceMoniker = value;
+            _deviceMoniker = value;
 
-            videoCapabilities = null;
-            snapshotCapabilities = null;
-            crossbarVideoInputs = null;
-            isCrossbarAvailable = null;
+            _videoCapabilities = null;
+            _snapshotCapabilities = null;
+            _crossbarVideoInputs = null;
+            _isCrossbarAvailable = null;
         }
     }
 
@@ -525,7 +525,7 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public object SourceObject
     {
-        get { return sourceObject; }
+        get { return _sourceObject; }
     }
 
     /// <summary>
@@ -543,17 +543,17 @@ public class VideoCaptureDevice : IVideoSource
     {
         get
         {
-            if (videoCapabilities == null)
+            if (_videoCapabilities == null)
             {
-                lock (cacheVideoCapabilities)
+                lock (_cacheVideoCapabilities)
                 {
-                    if ((!string.IsNullOrEmpty(deviceMoniker)) && (cacheVideoCapabilities.ContainsKey(deviceMoniker)))
+                    if ((!string.IsNullOrEmpty(_deviceMoniker)) && (_cacheVideoCapabilities.ContainsKey(_deviceMoniker)))
                     {
-                        videoCapabilities = cacheVideoCapabilities[deviceMoniker];
+                        _videoCapabilities = _cacheVideoCapabilities[_deviceMoniker];
                     }
                 }
 
-                if (videoCapabilities == null)
+                if (_videoCapabilities == null)
                 {
                     if (!IsRunning)
                     {
@@ -563,7 +563,7 @@ public class VideoCaptureDevice : IVideoSource
                     }
                     else
                     {
-                        for (int i = 0; (i < 500) && (videoCapabilities == null); i++)
+                        for (int i = 0; (i < 500) && (_videoCapabilities == null); i++)
                         {
                             Thread.Sleep(10);
                         }
@@ -571,7 +571,7 @@ public class VideoCaptureDevice : IVideoSource
                 }
             }
             // don't return null even capabilities are not provided for some reason
-            return (videoCapabilities != null) ? videoCapabilities : new VideoCapabilities[0];
+            return (_videoCapabilities != null) ? _videoCapabilities : new VideoCapabilities[0];
         }
     }
 
@@ -590,8 +590,8 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public VideoCapabilities VideoResolution
     {
-        get { return videoResolution; }
-        set { videoResolution = value; }
+        get { return _videoResolution; }
+        set { _videoResolution = value; }
     }
 
     /// <summary>
@@ -607,9 +607,9 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public bool CheckIfCrossbarAvailable()
     {
-        lock (sync)
+        lock (_sync)
         {
-            if (!isCrossbarAvailable.HasValue)
+            if (!_isCrossbarAvailable.HasValue)
             {
                 if (!IsRunning)
                 {
@@ -618,14 +618,14 @@ public class VideoCaptureDevice : IVideoSource
                 }
                 else
                 {
-                    for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue); i++)
+                    for (int i = 0; (i < 500) && (!_isCrossbarAvailable.HasValue); i++)
                     {
                         Thread.Sleep(10);
                     }
                 }
             }
 
-            return (!isCrossbarAvailable.HasValue) ? false : isCrossbarAvailable.Value;
+            return (!_isCrossbarAvailable.HasValue) ? false : _isCrossbarAvailable.Value;
         }
     }
 
@@ -653,27 +653,27 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public void DisplayCrossbarPropertyPage(IntPtr parentWindow)
     {
-        lock (sync)
+        lock (_sync)
         {
             // wait max 5 seconds till the flag gets initialized
-            for (int i = 0; (i < 500) && (!isCrossbarAvailable.HasValue) && (IsRunning); i++)
+            for (int i = 0; (i < 500) && (!_isCrossbarAvailable.HasValue) && (IsRunning); i++)
             {
                 Thread.Sleep(10);
             }
 
-            if ((!IsRunning) || (!isCrossbarAvailable.HasValue))
+            if ((!IsRunning) || (!_isCrossbarAvailable.HasValue))
             {
                 throw new ApplicationException("The video source must be running in order to display crossbar property page.");
             }
 
-            if (!isCrossbarAvailable.Value)
+            if (!_isCrossbarAvailable.Value)
             {
                 throw new NotSupportedException("Crossbar configuration is not supported by currently running video source.");
             }
 
-            // pass the request to background thread if video source is running
-            parentWindowForPropertyPage = parentWindow;
-            needToDisplayCrossBarPropertyPage = true;
+            // pass the request to background _thread if video source is running
+            _parentWindowForPropertyPage = parentWindow;
+            _needToDisplayCrossBarPropertyPage = true;
         }
     }
 
@@ -696,16 +696,16 @@ public class VideoCaptureDevice : IVideoSource
     public void DisplayPropertyPage(IntPtr parentWindow)
     {
         // check source
-        if ((deviceMoniker == null) || (deviceMoniker == string.Empty))
+        if ((_deviceMoniker == null) || (_deviceMoniker == string.Empty))
             throw new ArgumentException("Video source is not specified.");
 
-        lock (sync)
+        lock (_sync)
         {
             if (IsRunning)
             {
-                // pass the request to backgroud thread if video source is running
-                parentWindowForPropertyPage = parentWindow;
-                needToDisplayPropertyPage = true;
+                // pass the request to backgroud _thread if video source is running
+                _parentWindowForPropertyPage = parentWindow;
+                _needToDisplayPropertyPage = true;
                 return;
             }
 
@@ -714,7 +714,7 @@ public class VideoCaptureDevice : IVideoSource
             // create source device's object
             try
             {
-                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
+                tempSourceObject = FilterInfo.CreateFilter(_deviceMoniker);
             }
             catch
             {
@@ -751,19 +751,19 @@ public class VideoCaptureDevice : IVideoSource
         bool ret = true;
 
         // check if source was set
-        if ((deviceMoniker == null) || (string.IsNullOrEmpty(deviceMoniker)))
+        if ((_deviceMoniker == null) || (string.IsNullOrEmpty(_deviceMoniker)))
         {
             throw new ArgumentException("Video source is not specified.");
         }
 
-        lock (sync)
+        lock (_sync)
         {
             object tempSourceObject = null;
 
             // create source device's object
             try
             {
-                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
+                tempSourceObject = FilterInfo.CreateFilter(_deviceMoniker);
             }
             catch
             {
@@ -808,19 +808,19 @@ public class VideoCaptureDevice : IVideoSource
         bool ret = true;
 
         // check if source was set
-        if ((deviceMoniker == null) || (string.IsNullOrEmpty(deviceMoniker)))
+        if ((_deviceMoniker == null) || (string.IsNullOrEmpty(_deviceMoniker)))
         {
             throw new ArgumentException("Video source is not specified.");
         }
 
-        lock (sync)
+        lock (_sync)
         {
             object tempSourceObject = null;
 
             // create source device's object
             try
             {
-                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
+                tempSourceObject = FilterInfo.CreateFilter(_deviceMoniker);
             }
             catch
             {
@@ -862,19 +862,19 @@ public class VideoCaptureDevice : IVideoSource
         bool ret = true;
 
         // check if source was set
-        if ((deviceMoniker == null) || (string.IsNullOrEmpty(deviceMoniker)))
+        if ((_deviceMoniker == null) || (string.IsNullOrEmpty(_deviceMoniker)))
         {
             throw new ArgumentException("Video source is not specified.");
         }
 
-        lock (sync)
+        lock (_sync)
         {
             object tempSourceObject = null;
 
             // create source device's object
             try
             {
-                tempSourceObject = FilterInfo.CreateFilter(deviceMoniker);
+                tempSourceObject = FilterInfo.CreateFilter(_deviceMoniker);
             }
             catch
             {
@@ -901,16 +901,16 @@ public class VideoCaptureDevice : IVideoSource
     /// Signal video source to stop its work.
     /// </summary>
     ///
-    /// <remarks>Signals video source to stop its background thread, stop to
+    /// <remarks>Signals video source to stop its background _thread, stop to
     /// provide new frames and free resources.</remarks>
     ///
     public void SignalToStop()
     {
-        // stop thread
-        if (thread != null)
+        // stop _thread
+        if (_thread != null)
         {
             // signal to stop
-            stopEvent.Set();
+            _stopEvent.Set();
         }
     }
 
@@ -928,7 +928,7 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public void SimulateTrigger()
     {
-        needToSimulateTrigger = true;
+        _needToSimulateTrigger = true;
     }
 
     /// <summary>
@@ -936,7 +936,7 @@ public class VideoCaptureDevice : IVideoSource
     /// </summary>
     ///
     /// <remarks>Starts video source and return execution to caller. Video source
-    /// object creates background thread and notifies about new frames with the
+    /// object creates background _thread and notifies about new frames with the
     /// help of <see cref="NewFrame"/> event.</remarks>
     ///
     public void Start()
@@ -944,23 +944,23 @@ public class VideoCaptureDevice : IVideoSource
         if (!IsRunning)
         {
             // check source
-            if (string.IsNullOrEmpty(deviceMoniker))
+            if (string.IsNullOrEmpty(_deviceMoniker))
                 throw new ArgumentException("Video source is not specified.");
 
-            framesReceived = 0;
-            bytesReceived = 0;
-            isCrossbarAvailable = null;
-            needToSetVideoInput = true;
+            _framesReceived = 0;
+            _bytesReceived = 0;
+            _isCrossbarAvailable = null;
+            _needToSetVideoInput = true;
 
             // create events
-            stopEvent = new ManualResetEvent(false);
+            _stopEvent = new ManualResetEvent(false);
 
-            lock (sync)
+            lock (_sync)
             {
-                // create and start new thread
-                thread = new Thread(new ThreadStart(WorkerThread));
-                thread.Name = deviceMoniker; // mainly for debugging
-                thread.Start();
+                // create and start new _thread
+                _thread = new Thread(new ThreadStart(WorkerThread));
+                _thread.Name = _deviceMoniker; // mainly for debugging
+                _thread.Start();
             }
         }
     }
@@ -969,19 +969,19 @@ public class VideoCaptureDevice : IVideoSource
     /// Stop video source.
     /// </summary>
     ///
-    /// <remarks><para>Stops video source aborting its thread.</para>
+    /// <remarks><para>Stops video source aborting its _thread.</para>
     ///
-    /// <para><note>Since the method aborts background thread, its usage is highly not preferred
+    /// <para><note>Since the method aborts background _thread, its usage is highly not preferred
     /// and should be done only if there are no other options. The correct way of stopping camera
     /// is <see cref="SignalToStop">signaling it stop</see> and then
-    /// <see cref="WaitForStop">waiting</see> for background thread's completion.</note></para>
+    /// <see cref="WaitForStop">waiting</see> for background _thread's completion.</note></para>
     /// </remarks>
     ///
     public void Stop()
     {
         if (this.IsRunning)
         {
-            thread.Abort();
+            _thread.Abort();
             WaitForStop();
         }
     }
@@ -995,10 +995,10 @@ public class VideoCaptureDevice : IVideoSource
     ///
     public void WaitForStop()
     {
-        if (thread != null)
+        if (_thread != null)
         {
-            // wait for thread stop
-            thread.Join();
+            // wait for _thread stop
+            _thread.Join();
 
             Free();
         }
@@ -1007,11 +1007,11 @@ public class VideoCaptureDevice : IVideoSource
     // Collect all video inputs of the specified crossbar
     private VideoInput[] ColletCrossbarVideoInputs(IAMCrossbar crossbar)
     {
-        lock (cacheCrossbarVideoInputs)
+        lock (_cacheCrossbarVideoInputs)
         {
-            if (cacheCrossbarVideoInputs.ContainsKey(deviceMoniker))
+            if (_cacheCrossbarVideoInputs.ContainsKey(_deviceMoniker))
             {
-                return cacheCrossbarVideoInputs[deviceMoniker];
+                return _cacheCrossbarVideoInputs[_deviceMoniker];
             }
 
             List<VideoInput> videoInputsList = new List<VideoInput>();
@@ -1043,7 +1043,7 @@ public class VideoCaptureDevice : IVideoSource
             VideoInput[] videoInputs = new VideoInput[videoInputsList.Count];
             videoInputsList.CopyTo(videoInputs);
 
-            cacheCrossbarVideoInputs.Add(deviceMoniker, videoInputs);
+            _cacheCrossbarVideoInputs.Add(_deviceMoniker, videoInputs);
 
             return videoInputs;
         }
@@ -1062,7 +1062,7 @@ public class VideoCaptureDevice : IVideoSource
             pPropPages.GetPages(out caGUID);
 
             // get filter info
-            FilterInfo filterInfo = new FilterInfo(deviceMoniker);
+            FilterInfo filterInfo = new FilterInfo(_deviceMoniker);
 
             // create and display the OlePropertyFrame
             Win32.OleCreatePropertyFrame(parentWindow, 0, 0, filterInfo.Name, 1, ref sourceObject, caGUID.cElems, caGUID.pElems, 0, 0, IntPtr.Zero);
@@ -1081,11 +1081,11 @@ public class VideoCaptureDevice : IVideoSource
     ///
     private void Free()
     {
-        thread = null;
+        _thread = null;
 
         // release events
-        stopEvent.Close();
-        stopEvent = null;
+        _stopEvent.Close();
+        _stopEvent = null;
     }
 
     // Get type of input connected to video output of the crossbar
@@ -1247,10 +1247,10 @@ public class VideoCaptureDevice : IVideoSource
     ///
     private void OnNewFrame(Bitmap image)
     {
-        framesReceived++;
-        bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
+        _framesReceived++;
+        _bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
 
-        if ((!stopEvent.WaitOne(0, false)) && (NewFrame != null))
+        if ((!_stopEvent.WaitOne(0, false)) && (NewFrame != null))
             NewFrame(this, new NewFrameEventArgs(image));
     }
 
@@ -1262,13 +1262,13 @@ public class VideoCaptureDevice : IVideoSource
     ///
     private void OnSnapshotFrame(Bitmap image)
     {
-        TimeSpan timeSinceStarted = DateTime.Now - startTime;
+        TimeSpan timeSinceStarted = DateTime.Now - _startTime;
 
         // TODO: need to find better way to ignore the first snapshot, which is sent
         // automatically (or better disable it)
         if (timeSinceStarted.TotalSeconds >= 4)
         {
-            if ((!stopEvent.WaitOne(0, false)) && (SnapshotFrame != null))
+            if ((!_stopEvent.WaitOne(0, false)) && (SnapshotFrame != null))
                 SnapshotFrame(this, new NewFrameEventArgs(image));
         }
     }
@@ -1367,7 +1367,7 @@ public class VideoCaptureDevice : IVideoSource
     }
 
     /// <summary>
-    /// Worker thread.
+    /// Worker _thread.
     /// </summary>
     ///
     private void WorkerThread()
@@ -1429,17 +1429,17 @@ public class VideoCaptureDevice : IVideoSource
             captureGraph.SetFiltergraph((IGraphBuilder)graph);
 
             // create source device's object
-            sourceObject = FilterInfo.CreateFilter(deviceMoniker);
-            if (sourceObject == null)
+            _sourceObject = FilterInfo.CreateFilter(_deviceMoniker);
+            if (_sourceObject == null)
                 throw new ApplicationException("Failed creating device object for moniker");
 
             // get base filter interface of source device
-            sourceBase = (IBaseFilter)sourceObject;
+            sourceBase = (IBaseFilter)_sourceObject;
 
             // get video control interface of the device
             try
             {
-                videoControl = (IAMVideoControl)sourceObject;
+                videoControl = (IAMVideoControl)_sourceObject;
             }
             catch
             {
@@ -1466,15 +1466,15 @@ public class VideoCaptureDevice : IVideoSource
             graph.AddFilter(snapshotGrabberBase, "grabber_snapshot");
 
             // check if we need and can do JPEG encoding
-            if (preferJpegEncoding)
+            if (_preferJpegEncoding)
             {
-                jpegEncodingEnabled = IsJpegEncodingAvailable(sourceBase);
+                _jpegEncodingEnabled = IsJpegEncodingAvailable(sourceBase);
             }
 
             // set media types
             AMMediaType videoMediaType = new AMMediaType();
             videoMediaType.MajorType = MediaType.Video;
-            videoMediaType.SubType = (jpegEncodingEnabled) ? MediaSubType.MJpeg : MediaSubType.RGB24;
+            videoMediaType.SubType = (_jpegEncodingEnabled) ? MediaSubType.MJpeg : MediaSubType.RGB24;
 
             AMMediaType snapshotMediaType = new AMMediaType();
             snapshotMediaType.MajorType = MediaType.Video;
@@ -1489,13 +1489,13 @@ public class VideoCaptureDevice : IVideoSource
             {
                 crossbar = (IAMCrossbar)crossbarObject;
             }
-            isCrossbarAvailable = (crossbar != null);
-            crossbarVideoInputs = ColletCrossbarVideoInputs(crossbar);
+            _isCrossbarAvailable = (crossbar != null);
+            _crossbarVideoInputs = ColletCrossbarVideoInputs(crossbar);
 
             if (videoControl != null)
             {
                 // find Still Image output pin of the vedio device
-                captureGraph.FindPin(sourceObject, PinDirection.Output,
+                captureGraph.FindPin(_sourceObject, PinDirection.Output,
                     PinCategory.StillImage, MediaType.Video, false, 0, out pinStillImage);
                 // check if it support trigger mode
                 if (pinStillImage != null)
@@ -1519,30 +1519,30 @@ public class VideoCaptureDevice : IVideoSource
 
             // configure pins
             GetPinCapabilitiesAndConfigureSizeAndRate(captureGraph, sourceBase,
-                PinCategory.Capture, videoResolution, ref videoCapabilities);
+                PinCategory.Capture, _videoResolution, ref _videoCapabilities);
             if (isSapshotSupported)
             {
                 GetPinCapabilitiesAndConfigureSizeAndRate(captureGraph, sourceBase,
-                    PinCategory.StillImage, snapshotResolution, ref snapshotCapabilities);
+                    PinCategory.StillImage, _snapshotResolution, ref _snapshotCapabilities);
             }
             else
             {
-                snapshotCapabilities = new VideoCapabilities[0];
+                _snapshotCapabilities = new VideoCapabilities[0];
             }
 
             // put video/snapshot capabilities into cache
-            lock (cacheVideoCapabilities)
+            lock (_cacheVideoCapabilities)
             {
-                if ((videoCapabilities != null) && (!cacheVideoCapabilities.ContainsKey(deviceMoniker)))
+                if ((_videoCapabilities != null) && (!_cacheVideoCapabilities.ContainsKey(_deviceMoniker)))
                 {
-                    cacheVideoCapabilities.Add(deviceMoniker, videoCapabilities);
+                    _cacheVideoCapabilities.Add(_deviceMoniker, _videoCapabilities);
                 }
             }
-            lock (cacheSnapshotCapabilities)
+            lock (_cacheSnapshotCapabilities)
             {
-                if ((snapshotCapabilities != null) && (!cacheSnapshotCapabilities.ContainsKey(deviceMoniker)))
+                if ((_snapshotCapabilities != null) && (!_cacheSnapshotCapabilities.ContainsKey(_deviceMoniker)))
                 {
-                    cacheSnapshotCapabilities.Add(deviceMoniker, snapshotCapabilities);
+                    _cacheSnapshotCapabilities.Add(_deviceMoniker, _snapshotCapabilities);
                 }
             }
 
@@ -1563,7 +1563,7 @@ public class VideoCaptureDevice : IVideoSource
                     mediaType.Dispose();
                 }
 
-                if ((isSapshotSupported) && (provideSnapshots))
+                if ((isSapshotSupported) && (_provideSnapshots))
                 {
                     // render snapshot pin
                     captureGraph.RenderStream(PinCategory.StillImage, MediaType.Video, sourceBase, null, snapshotGrabberBase);
@@ -1590,9 +1590,9 @@ public class VideoCaptureDevice : IVideoSource
                 // run
                 mediaControl.Run();
 
-                if ((isSapshotSupported) && (provideSnapshots))
+                if ((isSapshotSupported) && (_provideSnapshots))
                 {
-                    startTime = DateTime.Now;
+                    _startTime = DateTime.Now;
                     videoControl.SetMode(pinStillImage, VideoControlFlags.ExternalTriggerEnable);
                 }
 
@@ -1612,50 +1612,50 @@ public class VideoCaptureDevice : IVideoSource
                         }
                     }
 
-                    if (needToSetVideoInput)
+                    if (_needToSetVideoInput)
                     {
-                        needToSetVideoInput = false;
+                        _needToSetVideoInput = false;
                         // set/check current input type of a video card (frame grabber)
-                        if (isCrossbarAvailable.Value)
+                        if (_isCrossbarAvailable.Value)
                         {
-                            SetCurrentCrossbarInput(crossbar, crossbarVideoInput);
-                            crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
+                            SetCurrentCrossbarInput(crossbar, _crossbarVideoInput);
+                            _crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
                         }
                     }
 
-                    if (needToSimulateTrigger)
+                    if (_needToSimulateTrigger)
                     {
-                        needToSimulateTrigger = false;
+                        _needToSimulateTrigger = false;
 
-                        if ((isSapshotSupported) && (provideSnapshots))
+                        if ((isSapshotSupported) && (_provideSnapshots))
                         {
                             videoControl.SetMode(pinStillImage, VideoControlFlags.Trigger);
                         }
                     }
 
-                    if (needToDisplayPropertyPage)
+                    if (_needToDisplayPropertyPage)
                     {
-                        needToDisplayPropertyPage = false;
-                        DisplayPropertyPage(parentWindowForPropertyPage, sourceObject);
+                        _needToDisplayPropertyPage = false;
+                        DisplayPropertyPage(_parentWindowForPropertyPage, _sourceObject);
 
                         if (crossbar != null)
                         {
-                            crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
+                            _crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
                         }
                     }
 
-                    if (needToDisplayCrossBarPropertyPage)
+                    if (_needToDisplayCrossBarPropertyPage)
                     {
-                        needToDisplayCrossBarPropertyPage = false;
+                        _needToDisplayCrossBarPropertyPage = false;
 
                         if (crossbar != null)
                         {
-                            DisplayPropertyPage(parentWindowForPropertyPage, crossbar);
-                            crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
+                            DisplayPropertyPage(_parentWindowForPropertyPage, crossbar);
+                            _crossbarVideoInput = GetCurrentCrossbarInput(crossbar);
                         }
                     }
                 }
-                while (!stopEvent.WaitOne(100, false));
+                while (!_stopEvent.WaitOne(100, false));
 
                 mediaControl.Stop();
             }
@@ -1690,10 +1690,10 @@ public class VideoCaptureDevice : IVideoSource
                 Marshal.ReleaseComObject(graphObject);
                 graphObject = null;
             }
-            if (sourceObject != null)
+            if (_sourceObject != null)
             {
-                Marshal.ReleaseComObject(sourceObject);
-                sourceObject = null;
+                Marshal.ReleaseComObject(_sourceObject);
+                _sourceObject = null;
             }
             if (videoGrabberObject != null)
             {
@@ -1722,7 +1722,7 @@ public class VideoCaptureDevice : IVideoSource
             PlayingFinished(this, reasonToStop);
         }
 
-        jpegEncodingEnabled = false;
+        _jpegEncodingEnabled = false;
     }
 
     //
@@ -1762,7 +1762,7 @@ public class VideoCaptureDevice : IVideoSource
             {
                 System.Drawing.Bitmap image = null;
 
-                if (!parent.jpegEncodingEnabled)
+                if (!parent._jpegEncodingEnabled)
                 {
                     // create new image
                     image = new Bitmap(width, height, PixelFormat.Format24bppRgb);
