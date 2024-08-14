@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Drawing;
 using System.Windows;
 using System.Windows.Media.Imaging;
 

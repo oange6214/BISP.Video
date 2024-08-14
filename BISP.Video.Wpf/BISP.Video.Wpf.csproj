@@ -9,4 +9,8 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
+	<ItemGroup>
+	  <PackageReference Include="System.Reactive" Version="6.0.1" />
+	</ItemGroup>
+
 </Project>

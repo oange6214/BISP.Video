@@ -4,6 +4,5 @@
              xmlns:local="clr-namespace:BISP.Video.Testing"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
     </Application.Resources>
 </Application>

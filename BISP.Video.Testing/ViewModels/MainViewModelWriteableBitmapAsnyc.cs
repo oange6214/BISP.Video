@@ -1,5 +1,4 @@
-﻿using BISP.Video;
-using BISP.Video.DirectShow;
+﻿using BISP.Video.DirectShow;
 using BISP.Video.Testing.Helpers;
 using BISP.Video.Testing.Toolkit.Mvvm;
 using BISP.Video.Testing.Toolkit.Mvvm.Input;

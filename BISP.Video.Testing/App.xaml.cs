@@ -1,6 +1,4 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+﻿using System.Windows;
 
 namespace BISP.Video.Testing
 {
@@ -10,5 +8,4 @@ namespace BISP.Video.Testing
     public partial class App : Application
     {
     }
-
 }

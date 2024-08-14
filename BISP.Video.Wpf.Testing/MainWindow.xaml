@@ -4,9 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
-    xmlns:local="clr-namespace:BISP.Video.Wpf.Testing"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:ui="clr-namespace:BISP.CommonElementUI;assembly=BISP.CommonElementUI"
     xmlns:viewmodels="clr-namespace:BISP.Video.Wpf.Testing.ViewModels"
     Title="MainWindow"
     Width="1500"
@@ -20,7 +18,9 @@
     </i:Interaction.Triggers>
 
     <Window.DataContext>
-        <viewmodels:MainViewModelWriteableBitmapWpf />
+        <!--<viewmodels:MainViewModelWriteableBitmapWpf />-->
+        <!--<viewmodels:MainViewModelWriteableBitmapWpfObservable />-->
+        <viewmodels:MainViewModelWriteableBitmapWpfActionBlock />
     </Window.DataContext>
 
     <Grid>
